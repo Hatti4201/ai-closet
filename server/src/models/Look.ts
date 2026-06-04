@@ -21,14 +21,14 @@ const LookSchema = new Schema<ILook>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     title: { type: String, required: true },
-    prompt: { type: String, required: true },
+    prompt: { type: String, default: '' },
     items: [
       {
         clothingItemId: { type: Schema.Types.ObjectId, ref: 'ClothingItem', required: true },
         category: { type: String, enum: ['Top', 'Bottom', 'Shoes', 'Accessory'], required: true },
       },
     ],
-    reasoning: { type: String, required: true },
+    reasoning: { type: String, default: '' },
     createdBy: { type: String, enum: ['AI', 'User'], default: 'AI' },
   },
   { timestamps: true }

@@ -11,16 +11,28 @@ dotenv.config();
 
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_URL,
+].filter(Boolean) as string[];
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://ai-closet-pi.vercel.app"
-  ],
-  credentials: true
+  origin: (origin, cb) => {
+    // Allow requests with no origin (Render health checks, curl, mobile)
+    if (!origin) return cb(null, true);
+    // Allow any vercel.app subdomain for preview deployments
+    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+    cb(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
 }));
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/clothing', clothingRoutes);
