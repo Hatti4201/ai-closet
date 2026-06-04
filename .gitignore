@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+client/.env
+client/.env.local
+server/.env
+server/.env.local
+
+# build
+dist/
+build/
+
+# logs
+*.log
+
+# mac
+.DS_Store.claude/settings.local.json
+server/uploads/
+.claude/
+server/test-cloudinary.js
