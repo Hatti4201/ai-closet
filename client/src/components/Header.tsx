@@ -1,7 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 
 export default function Header() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   const handleLogout = () => {
@@ -10,28 +11,32 @@ export default function Header() {
     navigate('/login');
   };
 
+  const navLink = (to: string, label: string) => (
+    <Link
+      to={to}
+      className={`text-sm transition-colors ${
+        pathname === to || pathname.startsWith(to + '/')
+          ? 'text-gray-900 font-medium'
+          : 'text-gray-500 hover:text-gray-900'
+      }`}
+    >
+      {label}
+    </Link>
+  );
+
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-      <Link to="/wardrobe" className="text-xl font-semibold text-gray-900 tracking-tight">
-        AI Closet Stylist
+    <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+      <Link to="/home" className="text-xl font-semibold text-gray-900 tracking-tight">
+        AI Closet
       </Link>
       <nav className="flex items-center gap-6">
-        <Link to="/wardrobe" className="text-sm text-gray-600 hover:text-gray-900">
-          Wardrobe
-        </Link>
-        <Link to="/upload" className="text-sm text-gray-600 hover:text-gray-900">
-          Upload
-        </Link>
-        <Link to="/recommendations" className="text-sm text-gray-600 hover:text-gray-900">
-          My Looks
-        </Link>
-        {user && (
-          <span className="text-sm text-gray-400">{user.name}</span>
-        )}
-        <button
-          onClick={handleLogout}
-          className="text-sm text-red-500 hover:text-red-700"
-        >
+        {navLink('/home', 'Style')}
+        {navLink('/wardrobe', 'Wardrobe')}
+        {navLink('/upload', 'Upload')}
+        {navLink('/recommendations', 'My Looks')}
+        {user && <span className="text-sm text-gray-300">|</span>}
+        {user && <span className="text-sm text-gray-400">{user.name}</span>}
+        <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
           Logout
         </button>
       </nav>
