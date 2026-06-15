@@ -1,13 +1,17 @@
 # dependencies
 node_modules/
 
-# env
+# env (real env files stay OUT of git — they hold secrets)
 .env
 .env.*
 client/.env
 client/.env.local
 server/.env
 server/.env.local
+# ...but DO track the example templates (empty placeholders, no secrets)
+!.env.example
+!server/.env.example
+!client/.env.example
 
 # build
 dist/
@@ -17,7 +21,7 @@ build/
 *.log
 
 # mac
-.DS_Store.claude/settings.local.json
+.DS_Store
 server/uploads/
 .claude/
 server/test-cloudinary.js

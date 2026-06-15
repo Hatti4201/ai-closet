@@ -1,71 +1,95 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import { Schema, model, HydratedDocument } from "mongoose";
+import {
+  CATEGORIES, COLOR_FAMILIES, PATTERNS, OCCASION_TAGS, ITEM_SOURCES,
+  Category, Pattern, OccasionTag, ItemSource, Color,
+} from "./enums";
+import { exposeStringId } from "./_id";
 
-export interface IClothingImage {
-  url: string;
-  isMain: boolean;
-}
-
-export interface IColor {
-  family: string;
-  name?: string;
-}
-
-export type Category = 'Top' | 'Bottom' | 'Shoes' | 'Accessory';
-export type Pattern = 'Solid' | 'Striped' | 'Plaid' | 'Graphic' | 'Patterned';
-
-export interface IClothingItem extends Document {
-  userId: mongoose.Types.ObjectId;
+// Contract §1.3
+export interface ClothingItemDoc {
+  _id: string; // exposed as `id` in JSON
+  memberId: string;
   name: string;
+  brand?: string;
   category: Category;
   subcategory?: string;
-  colors: IColor[];
+  colors: Color[];
   pattern: Pattern;
-  material: string;
-  temperatureIndex: number;
-  coverageLevel: number;
-  images: IClothingImage[];
-  createdAt: Date;
-  updatedAt: Date;
+  material?: string;
+  temperatureIndex: number; // 0-10
+  coverageLevel: number; // 0-10
+  occasionTags: OccasionTag[];
+  source: ItemSource;
+  images: string[]; // max 3, images[0] = main
+  purchasedAt?: string;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
 }
 
-const ClothingItemSchema = new Schema<IClothingItem>(
+const ColorSchema = new Schema<Color>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    name: { type: String, required: true, trim: true },
-    category: { type: String, enum: ['Top', 'Bottom', 'Shoes', 'Accessory'], required: true },
-    subcategory: { type: String },
-    colors: [
-      {
-        family: { type: String, required: true },
-        name: { type: String },
-      },
-    ],
-    pattern: { type: String, enum: ['Solid', 'Striped', 'Plaid', 'Graphic', 'Patterned'], required: true },
-    material: { type: String, required: true },
-    temperatureIndex: { type: Number, required: true, min: 0, max: 10 },
-    coverageLevel: { type: Number, required: true, min: 0, max: 10 },
-    images: [
-      {
-        url: { type: String, required: true },
-        isMain: { type: Boolean, required: true, default: false },
-      },
-    ],
+    family: { type: String, enum: [...COLOR_FAMILIES], required: true },
+    name: { type: String },
   },
-  { timestamps: true }
+  { _id: false }
 );
 
-// Always return absolute image URLs regardless of what is stored in DB
-ClothingItemSchema.set('toJSON', {
-  transform: (_doc, ret) => {
-    const base = (process.env.API_BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
-    if (Array.isArray(ret.images)) {
-      ret.images = ret.images.map((img: IClothingImage) => ({
-        ...img,
-        url: img.url.startsWith('http') ? img.url : `${base}${img.url}`,
-      }));
-    }
-    return ret;
+const ClothingItemSchema = new Schema<ClothingItemDoc>(
+  {
+    _id: { type: String, required: true },
+    memberId: { type: String, required: true },
+    name: { type: String, required: true },
+    brand: { type: String },
+    category: { type: String, enum: [...CATEGORIES], required: true },
+    subcategory: { type: String },
+    colors: {
+      type: [ColorSchema],
+      required: true,
+      validate: {
+        validator: (v: Color[]) => Array.isArray(v) && v.length >= 1,
+        message: "at least one color is required",
+      },
+    },
+    pattern: { type: String, enum: [...PATTERNS], required: true },
+    material: { type: String },
+    temperatureIndex: { type: Number, required: true, min: 0, max: 10 },
+    coverageLevel: { type: Number, required: true, min: 0, max: 10 },
+    occasionTags: { type: [{ type: String, enum: [...OCCASION_TAGS] }], default: [] },
+    source: { type: String, enum: [...ITEM_SOURCES], required: true },
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (v: string[]) => v.length <= 3,
+        message: "at most 3 images (images[0] = main)",
+      },
+    },
+    purchasedAt: { type: String },
+    createdAt: { type: String },
+    updatedAt: { type: String },
   },
+  { versionKey: false }
+);
+
+// Retrieval indexes (contract / brief): the DB is a search layer, not just storage.
+ClothingItemSchema.index({ memberId: 1 });
+ClothingItemSchema.index({ category: 1 });
+ClothingItemSchema.index({ temperatureIndex: 1 });
+ClothingItemSchema.index({ "colors.family": 1 });
+ClothingItemSchema.index({ occasionTags: 1 });
+
+// Contract uses ISO date *strings*; manage them here instead of mongoose Dates.
+ClothingItemSchema.pre("save", function (this: HydratedDocument<ClothingItemDoc>, next) {
+  const now = new Date().toISOString();
+  if (this.isNew) {
+    if (!this.createdAt) this.createdAt = now;
+    if (!this.updatedAt) this.updatedAt = now;
+  } else {
+    this.updatedAt = now;
+  }
+  next();
 });
 
-export default mongoose.model<IClothingItem>('ClothingItem', ClothingItemSchema);
+exposeStringId(ClothingItemSchema);
+
+export const ClothingItem = model<ClothingItemDoc>("ClothingItem", ClothingItemSchema);

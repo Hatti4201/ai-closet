@@ -1,43 +1,42 @@
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import dotenv from 'dotenv';
-import authRoutes from './routes/authRoutes';
-import clothingRoutes from './routes/clothingRoutes';
-import recommendationRoutes from './routes/recommendationRoutes';
-import { errorHandler } from './middleware/errorMiddleware';
+import express, { Express, Request, Response, NextFunction } from "express";
+import cors from "cors";
+import membersRouter from "./routes/members";
+import wardrobeRouter from "./routes/wardrobe";
+import looksRouter from "./routes/looks";
+import ingestRouter from "./routes/ingest";
 
-dotenv.config();
+/**
+ * Express assembly point — the ONE file Backend A and B both touch.
+ * Convention: each route lives in its own file under src/routes/; here we only
+ * `import` it and `app.use()` it. Keep middleware order + the error handler fixed.
+ */
+export function createApp(): Express {
+  const app = express();
 
-const app = express();
+  app.use(cors());
+  app.use(express.json());
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  process.env.CLIENT_URL,
-].filter(Boolean) as string[];
+  app.get("/health", (_req: Request, res: Response) => {
+    res.json({ ok: true, service: "ai-closet backend" });
+  });
 
-app.use(cors({
-  origin: (origin, cb) => {
-    // Allow requests with no origin (Render health checks, curl, mobile)
-    if (!origin) return cb(null, true);
-    // Allow any vercel.app subdomain for preview deployments
-    if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
-      return cb(null, true);
-    }
-    cb(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: true,
-}));
+  // --- routes mount here ---
+  app.use("/api/members", membersRouter); // A-P2 — read: GET /api/members
+  app.use("/api/wardrobe", wardrobeRouter); // A-P2 — read: GET /api/wardrobe[/:id]
+  app.use("/api/looks", looksRouter); // A-P4 — write: POST /api/looks
+  app.use("/api/ingest", ingestRouter); // A-P4 — write (dev): POST /api/ingest
+  // app.use("/api", recommendRouter);            // B — POST /api/recommend (B adds this line)
 
-app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+  // 404
+  app.use((_req: Request, res: Response) => {
+    res.status(404).json({ message: "Not found" });
+  });
 
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  // Error handler — uniform error shape: { message }
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = typeof err?.status === "number" ? err.status : 500;
+    res.status(status).json({ message: err?.message ?? "Internal error" });
+  });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/clothing', clothingRoutes);
-app.use('/api/recommendations', recommendationRoutes);
-
-app.use(errorHandler);
-
-export default app;
+  return app;
+}
