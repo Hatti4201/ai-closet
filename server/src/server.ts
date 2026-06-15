@@ -1,16 +1,28 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import "dotenv/config";
+import { connectDB } from "./db/connection";
+import { createApp } from "./app";
 
-import app from './app';
-import { connectDB } from './config/db';
+async function main(): Promise<void> {
+  const { inMemory } = await connectDB();
 
-const PORT = process.env.PORT || 5000;
+  // Dev only: the in-memory DB starts empty and is private to this process,
+  // so auto-seed it on boot to make the read endpoints immediately testable.
+  // With a real MONGO_URI (shared DB) we never auto-seed — that data is real.
+  if (inMemory) {
+    const { seedDatabase } = await import("../seed/load");
+    const { members, items } = await seedDatabase();
+    console.log(`[server] in-memory DB auto-seeded: ${members} members, ${items} items`);
+  }
 
-connectDB()
-  .then(() => {
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error('Failed to connect to MongoDB:', err);
-    process.exit(1);
+  const app = createApp();
+  const port = Number(process.env.PORT) || 4000;
+  app.listen(port, () => {
+    console.log(`[server] listening on http://localhost:${port}`);
+    console.log(`[server] health check: http://localhost:${port}/health`);
   });
+}
+
+main().catch((err) => {
+  console.error("[server] failed to start:", err);
+  process.exit(1);
+});
