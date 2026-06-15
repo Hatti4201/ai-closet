@@ -2,33 +2,44 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clothingApi } from '../api/clothingApi';
 import { recommendationApi } from '../api/recommendationApi';
+import { membersApi } from '../api/membersApi';
 import { ClothingItem, Category } from '../types/clothing';
-import { LookItem } from '../types/look';
-import { getImageUrl } from '../utils/imageUrl';
+import { getFirstImage } from '../utils/imageUrl';
 
-const CATEGORIES: Category[] = ['Top', 'Bottom', 'Shoes', 'Accessory'];
+const CATEGORIES: Category[] = ['Top', 'Bottom', 'Shoes', 'Outerwear', 'Dress', 'Accessory'];
+
+type SlotMap = Record<Category, ClothingItem | null>;
+
+const emptySlots = (): SlotMap =>
+  Object.fromEntries(CATEGORIES.map((c) => [c, null])) as SlotMap;
 
 export default function CreateLookPage() {
   const navigate = useNavigate();
   const [wardrobe, setWardrobe] = useState<ClothingItem[]>([]);
-  const [selected, setSelected] = useState<Record<Category, ClothingItem | null>>({
-    Top: null, Bottom: null, Shoes: null, Accessory: null,
-  });
+  const [selected, setSelected] = useState<SlotMap>(emptySlots());
   const [activeTab, setActiveTab] = useState<Category>('Top');
   const [title, setTitle] = useState('');
+  const [memberId, setMemberId] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    clothingApi.getAll().then((d) => setWardrobe(d.items));
+    Promise.all([
+      clothingApi.getAll(),
+      membersApi.getAll(),
+    ]).then(([items, ms]) => {
+      setWardrobe(items as ClothingItem[]);
+      if (ms[0]) setMemberId(ms[0].id);
+    });
   }, []);
 
   const itemsByCategory = (cat: Category) => wardrobe.filter((i) => i.category === cat);
 
   const handleSelect = (item: ClothingItem) => {
+    const itemId = item.id ?? item._id ?? '';
     setSelected((prev) => ({
       ...prev,
-      [item.category]: prev[item.category]?._id === item._id ? null : item,
+      [item.category]: (prev[item.category]?.id ?? prev[item.category]?._id) === itemId ? null : item,
     }));
   };
 
@@ -38,17 +49,18 @@ export default function CreateLookPage() {
     setError('');
     if (!title.trim()) { setError('Please give your look a name.'); return; }
     if (selectedItems.length === 0) { setError('Select at least one item.'); return; }
-
-    const items: LookItem[] = selectedItems.map((item) => ({
-      clothingItemId: item._id,
-      category: item.category,
-      clothingItem: item,
-    }));
+    if (!memberId) { setError('No member found.'); return; }
 
     setSaving(true);
     try {
-      const saved = await recommendationApi.create({ title, items });
-      navigate(`/looks/${saved._id}`);
+      const result = await recommendationApi.saveLook({
+        memberId,
+        itemIds: selectedItems.map((i) => i.id ?? i._id ?? ''),
+        prompt: '',
+        reasoning: '',
+        title,
+      });
+      navigate(`/looks/${result.id}`);
     } catch {
       setError('Failed to save look. Please try again.');
     } finally {
@@ -66,7 +78,7 @@ export default function CreateLookPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: item picker */}
         <div className="lg:col-span-2">
-          <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl w-fit">
+          <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl w-fit flex-wrap">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -84,29 +96,24 @@ export default function CreateLookPage() {
           {itemsByCategory(activeTab).length === 0 ? (
             <div className="text-center py-16 text-gray-400 bg-gray-50 rounded-xl">
               <p>No {activeTab} items in your wardrobe.</p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="mt-2 text-sm text-gray-900 underline"
-              >
-                Upload one
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {itemsByCategory(activeTab).map((item) => {
-                const img = item.images.find((i) => i.isMain) || item.images[0];
-                const isSelected = selected[item.category]?._id === item._id;
+                const imgUrl = getFirstImage(item.images);
+                const itemId = item.id ?? item._id ?? '';
+                const isSelected = (selected[item.category]?.id ?? selected[item.category]?._id) === itemId;
                 return (
                   <button
-                    key={item._id}
+                    key={itemId}
                     onClick={() => handleSelect(item)}
                     className={`text-left rounded-xl border-2 overflow-hidden transition-all ${
                       isSelected ? 'border-gray-900 shadow-md' : 'border-transparent hover:border-gray-200'
                     }`}
                   >
                     <div className="aspect-square bg-gray-100">
-                      {img ? (
-                        <img src={getImageUrl(img.url)} alt={item.name} className="w-full h-full object-cover" />
+                      {imgUrl ? (
+                        <img src={imgUrl} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300 text-3xl">👕</div>
                       )}
@@ -134,11 +141,11 @@ export default function CreateLookPage() {
             ) : (
               <div className="grid grid-cols-2 gap-2 mb-4">
                 {selectedItems.map((item) => {
-                  const img = item.images.find((i) => i.isMain) || item.images[0];
+                  const imgUrl = getFirstImage(item.images);
                   return (
-                    <div key={item._id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
-                      {img ? (
-                        <img src={getImageUrl(img.url)} alt={item.name} className="w-full h-full object-cover" />
+                    <div key={item.id ?? item._id} className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
+                      {imgUrl ? (
+                        <img src={imgUrl} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-300">👕</div>
                       )}

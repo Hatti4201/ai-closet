@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { recommendationApi } from '../api/recommendationApi';
-import { Look } from '../types/look';
+import { membersApi } from '../api/membersApi';
+import { SavedLook } from '../types/look';
 import LookCard from '../components/LookCard';
 
 export default function RecommendationPage() {
   const navigate = useNavigate();
-  const [looks, setLooks] = useState<Look[]>([]);
+  const [looks, setLooks] = useState<SavedLook[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    recommendationApi.getAll()
-      .then((data) => setLooks(data.looks))
+    membersApi.getAll()
+      .then((ms) => recommendationApi.getAll(ms[0]?.id))
+      .then(setLooks)
       .finally(() => setLoading(false));
   }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Remove this look from favorites?')) return;
     await recommendationApi.delete(id);
-    setLooks((prev) => prev.filter((l) => l._id !== id));
+    setLooks((prev) => prev.filter((l) => l.id !== id));
   };
 
   if (loading) {
@@ -51,7 +53,7 @@ export default function RecommendationPage() {
           <p className="text-5xl mb-4">♡</p>
           <p className="text-lg font-medium">No saved looks yet</p>
           <p className="text-sm mt-1">
-            Use the ✨ AI button on your wardrobe to generate looks, or create one yourself.
+            Use the ✨ AI button on the home screen to generate looks, or create one yourself.
           </p>
           <button
             onClick={() => navigate('/looks/create')}
@@ -63,10 +65,10 @@ export default function RecommendationPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {looks.map((look) => (
-            <div key={look._id} className="relative group">
+            <div key={look.id} className="relative group">
               <LookCard look={look} />
               <button
-                onClick={() => handleDelete(look._id)}
+                onClick={() => handleDelete(look.id)}
                 className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-lg leading-none"
                 title="Remove from favorites"
               >

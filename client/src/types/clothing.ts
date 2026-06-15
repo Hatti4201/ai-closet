@@ -1,4 +1,4 @@
-export type Category = 'Top' | 'Bottom' | 'Shoes' | 'Accessory';
+export type Category = 'Top' | 'Bottom' | 'Shoes' | 'Outerwear' | 'Dress' | 'Accessory';
 export type Pattern = 'Solid' | 'Striped' | 'Plaid' | 'Graphic' | 'Patterned';
 
 export interface ClothingImage {
@@ -12,19 +12,21 @@ export interface Color {
 }
 
 export interface ClothingItem {
-  _id: string;
-  userId: string;
+  id: string;                          // new backend: exposeStringId outputs `id`
+  _id?: string;                        // may be absent in new backend responses
+  memberId?: string;
   name: string;
+  brand?: string;
   category: Category;
   subcategory?: string;
   colors: Color[];
   pattern: Pattern;
-  material: string;
+  material?: string;
   temperatureIndex: number;
   coverageLevel: number;
-  images: ClothingImage[];
+  images: (string | ClothingImage)[];  // new backend: string[]; old: ClothingImage[]
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface ClothingFilters {

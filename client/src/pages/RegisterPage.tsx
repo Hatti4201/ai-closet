@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api/authApi';
+// Auth removed in MVP backend
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -15,9 +15,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      const data = await authApi.register({ name, email, password });
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('user', JSON.stringify({ name, email }));
       navigate('/wardrobe');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;

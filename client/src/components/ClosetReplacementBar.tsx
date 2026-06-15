@@ -1,5 +1,5 @@
-import { ClothingItem } from '../types/clothing';
-import { Category } from '../types/clothing';
+import { ClothingItem, Category } from '../types/clothing';
+import { getFirstImage } from '../utils/imageUrl';
 
 interface Props {
   items: ClothingItem[];
@@ -23,16 +23,16 @@ export default function ClosetReplacementBar({ items, priorityCategory, onSelect
       </p>
       <div className="flex gap-3 overflow-x-auto pb-2">
         {sorted.map((item) => {
-          const img = item.images.find((i) => i.isMain) || item.images[0];
+          const imgUrl = getFirstImage(item.images);
           return (
             <button
-              key={item._id}
+              key={item.id ?? item._id}
               onClick={() => onSelect(item)}
               className="shrink-0 flex flex-col items-center gap-1 group"
             >
               <div className="w-16 h-16 bg-gray-100 rounded-xl overflow-hidden border-2 border-transparent group-hover:border-blue-400 transition-colors">
-                {img ? (
-                  <img src={img.url} alt={item.name} className="w-full h-full object-cover" />
+                {imgUrl ? (
+                  <img src={imgUrl} alt={item.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">?</div>
                 )}

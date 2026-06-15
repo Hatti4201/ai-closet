@@ -1,37 +1,37 @@
-import mongoose, { Document, Schema } from 'mongoose';
-import { Category } from './ClothingItem';
+import { Schema, model, HydratedDocument } from "mongoose";
+import { exposeStringId } from "./_id";
 
-export interface ILookItem {
-  clothingItemId: mongoose.Types.ObjectId;
-  category: Category;
-}
-
-export interface ILook extends Document {
-  userId: mongoose.Types.ObjectId;
-  title: string;
+// A saved/accepted outfit (contract §2 save_look + §3 look shape).
+export interface LookDoc {
+  _id: string; // exposed as `id` in JSON
+  memberId: string;
+  itemIds: string[];
+  title?: string;
   prompt: string;
-  items: ILookItem[];
   reasoning: string;
-  createdBy: 'AI' | 'User';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string; // ISO date string
 }
 
-const LookSchema = new Schema<ILook>(
+const LookSchema = new Schema<LookDoc>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    title: { type: String, required: true },
-    prompt: { type: String, default: '' },
-    items: [
-      {
-        clothingItemId: { type: Schema.Types.ObjectId, ref: 'ClothingItem', required: true },
-        category: { type: String, enum: ['Top', 'Bottom', 'Shoes', 'Accessory'], required: true },
-      },
-    ],
-    reasoning: { type: String, default: '' },
-    createdBy: { type: String, enum: ['AI', 'User'], default: 'AI' },
+    _id: { type: String, required: true },
+    memberId: { type: String, required: true },
+    itemIds: { type: [String], default: [] },
+    title: { type: String },
+    prompt: { type: String, required: true },
+    reasoning: { type: String, required: true },
+    createdAt: { type: String },
   },
-  { timestamps: true }
+  { versionKey: false }
 );
 
-export default mongoose.model<ILook>('Look', LookSchema);
+LookSchema.index({ memberId: 1 });
+
+LookSchema.pre("save", function (this: HydratedDocument<LookDoc>, next) {
+  if (this.isNew && !this.createdAt) this.createdAt = new Date().toISOString();
+  next();
+});
+
+exposeStringId(LookSchema);
+
+export const Look = model<LookDoc>("Look", LookSchema);
