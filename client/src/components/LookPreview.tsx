@@ -1,5 +1,5 @@
 import { LookItem } from '../types/look';
-import { getImageUrl } from '../utils/imageUrl';
+import { getFirstImage } from '../utils/imageUrl';
 
 interface Props {
   items: LookItem[];
@@ -9,11 +9,11 @@ export default function LookPreview({ items }: Props) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {items.map((item, idx) => {
-        const img = item.clothingItem?.images?.find((i) => i.isMain) || item.clothingItem?.images?.[0];
+        const imgUrl = getFirstImage(item.clothingItem?.images as any);
         return (
           <div key={idx} className="aspect-square bg-gray-100 rounded-xl overflow-hidden relative">
-            {img ? (
-              <img src={getImageUrl(img.url)} alt={item.clothingItem?.name ?? ''} className="w-full h-full object-cover" />
+            {imgUrl ? (
+              <img src={imgUrl} alt={item.clothingItem?.name ?? ''} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
                 <span className="text-3xl">👕</span>

@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { authApi } from '../api/authApi';
+import { useNavigate } from 'react-router-dom';
+// Auth removed in MVP backend
 
 export default function LoginPage() {
   const navigate = useNavigate();

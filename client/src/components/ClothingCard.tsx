@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ClothingItem } from '../types/clothing';
 import { clothingApi } from '../api/clothingApi';
-import { getImageUrl } from '../utils/imageUrl';
+import { getFirstImage } from '../utils/imageUrl';
 
 interface Props {
   item: ClothingItem;
@@ -10,23 +10,24 @@ interface Props {
 
 export default function ClothingCard({ item, onDeleted }: Props) {
   const navigate = useNavigate();
-  const mainImage = item.images.find((img) => img.isMain) || item.images[0];
+  const itemId = item.id ?? item._id ?? '';
+  const imgUrl = getFirstImage(item.images);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(`Delete "${item.name}"?`)) return;
-    await clothingApi.delete(item._id);
-    onDeleted(item._id);
+    await clothingApi.delete(itemId);
+    onDeleted(itemId);
   };
 
   return (
     <div
       className="bg-white rounded-xl border border-gray-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-      onClick={() => navigate(`/clothing/${item._id}`)}
+      onClick={() => navigate(`/clothing/${itemId}`)}
     >
       <div className="aspect-square bg-gray-100 relative">
-        {mainImage ? (
-          <img src={getImageUrl(mainImage.url)} alt={item.name} className="w-full h-full object-cover" />
+        {imgUrl ? (
+          <img src={imgUrl} alt={item.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300 text-4xl">
             👕
@@ -39,7 +40,7 @@ export default function ClothingCard({ item, onDeleted }: Props) {
         <p className="text-xs text-gray-400">{item.pattern} · {item.material}</p>
         <div className="flex gap-2 mt-3">
           <button
-            onClick={(e) => { e.stopPropagation(); navigate(`/clothing/${item._id}/edit`); }}
+            onClick={(e) => { e.stopPropagation(); navigate(`/clothing/${itemId}/edit`); }}
             className="flex-1 text-xs py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
           >
             Edit

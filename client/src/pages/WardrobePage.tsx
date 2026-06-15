@@ -4,22 +4,18 @@ import { clothingApi } from '../api/clothingApi';
 import { ClothingItem, ClothingFilters } from '../types/clothing';
 import ClothingCard from '../components/ClothingCard';
 import WardrobeFilterSidebar from '../components/WardrobeFilterSidebar';
-import AIChatEntry from '../components/AIChatEntry';
-import LookCard from '../components/LookCard';
-import { Look, UnsavedLook } from '../types/look';
 
 export default function WardrobePage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [filters, setFilters] = useState<ClothingFilters>({});
   const [loading, setLoading] = useState(true);
-  const [generatedLooks, setGeneratedLooks] = useState<UnsavedLook[]>([]);
 
   const fetchItems = async () => {
     setLoading(true);
     try {
       const data = await clothingApi.getAll(filters);
-      setItems(data.items);
+      setItems(data as ClothingItem[]);
     } finally {
       setLoading(false);
     }
@@ -38,30 +34,6 @@ export default function WardrobePage() {
           + Add Item
         </button>
       </div>
-
-      {generatedLooks.length > 0 && (
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-medium text-gray-900">Generated Looks</h2>
-            <button onClick={() => setGeneratedLooks([])} className="text-xs text-gray-400 hover:text-gray-600">
-              Clear
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {generatedLooks.map((look, idx) => (
-              <LookCard
-                key={idx}
-                look={look}
-                onSaved={(saved) =>
-                  setGeneratedLooks((prev) =>
-                    prev.map((l, i) => (i === idx ? (saved as unknown as UnsavedLook) : l))
-                  )
-                }
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="flex gap-6">
         <WardrobeFilterSidebar filters={filters} onChange={setFilters} />
@@ -89,9 +61,9 @@ export default function WardrobePage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {items.map((item) => (
                 <ClothingCard
-                  key={item._id}
+                  key={item.id ?? item._id}
                   item={item}
-                  onDeleted={(id) => setItems((prev) => prev.filter((i) => i._id !== id))}
+                  onDeleted={(id) => setItems((prev) => prev.filter((i) => (i.id ?? i._id) !== id))}
                 />
               ))}
             </div>
@@ -99,7 +71,6 @@ export default function WardrobePage() {
         </div>
       </div>
 
-      <AIChatEntry onLooksGenerated={setGeneratedLooks} />
     </div>
   );
 }

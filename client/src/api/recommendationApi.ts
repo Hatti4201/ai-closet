@@ -1,37 +1,27 @@
 import api from './authApi';
-import { Look, LookItem, UnsavedLook } from '../types/look';
+import { RecommendationResult, SavedLook } from '../types/look';
 
 export const recommendationApi = {
-  generate: (prompt: string): Promise<{ looks: UnsavedLook[] }> =>
-    api.post<{ looks: UnsavedLook[] }>('/recommendations/generate', { prompt }).then((r) => r.data),
+  generate: (memberId: string, prompt: string): Promise<RecommendationResult> =>
+    api.post<RecommendationResult>('/recommend', { memberId, prompt }).then((r) => r.data),
 
-  save: (look: UnsavedLook): Promise<Look> =>
-    api.post<Look>('/recommendations', {
-      title: look.title,
-      prompt: look.prompt,
-      reasoning: look.reasoning,
-      createdBy: look.createdBy,
-      items: look.items.map((i) => ({ clothingItemId: i.clothingItemId, category: i.category })),
-    }).then((r) => r.data),
+  saveLook: (params: {
+    memberId: string;
+    itemIds: string[];
+    prompt: string;
+    reasoning: string;
+    title?: string;
+  }): Promise<{ id: string }> =>
+    api.post<{ id: string }>('/looks', params).then((r) => r.data),
 
-  create: (data: { title: string; items: LookItem[] }): Promise<Look> =>
-    api.post<Look>('/recommendations', {
-      title: data.title,
-      prompt: '',
-      reasoning: '',
-      createdBy: 'User',
-      items: data.items.map((i) => ({ clothingItemId: i.clothingItemId, category: i.category })),
-    }).then((r) => r.data),
+  getAll: (memberId?: string): Promise<SavedLook[]> => {
+    const qs = memberId ? `?memberId=${memberId}` : '';
+    return api.get<SavedLook[]>(`/looks${qs}`).then((r) => r.data);
+  },
 
-  getAll: (): Promise<{ looks: Look[] }> =>
-    api.get<{ looks: Look[] }>('/recommendations').then((r) => r.data),
-
-  getOne: (id: string): Promise<Look> =>
-    api.get<Look>(`/recommendations/${id}`).then((r) => r.data),
-
-  update: (id: string, items: LookItem[]): Promise<Look> =>
-    api.put<Look>(`/recommendations/${id}`, { items }).then((r) => r.data),
+  getOne: (id: string): Promise<SavedLook> =>
+    api.get<SavedLook>(`/looks/${id}`).then((r) => r.data),
 
   delete: (id: string): Promise<void> =>
-    api.delete(`/recommendations/${id}`).then(() => undefined),
+    api.delete(`/looks/${id}`).then(() => undefined),
 };

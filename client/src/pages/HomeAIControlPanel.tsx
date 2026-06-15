@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { recommendationApi } from '../api/recommendationApi';
-import { UnsavedLook } from '../types/look';
+import { membersApi, Member } from '../api/membersApi';
+import { clothingApi } from '../api/clothingApi';
+import { ClothingItem } from '../types/clothing';
+import { RecommendationLook } from '../types/look';
 import WeatherQuadrant from '../components/ai-panel/WeatherQuadrant';
 import ScenarioSelector from '../components/ai-panel/ScenarioSelector';
 import ColorComboSelector, { COLOR_COMBOS } from '../components/ai-panel/ColorComboSelector';
@@ -22,12 +25,11 @@ function buildPrompt(
   customPrompt: string
 ): string {
   const parts: string[] = [];
-  parts.push('Weather: 72°F, Sunny in Fremont.');
   if (scenarios.length > 0) parts.push(`Occasion: ${scenarios.join(', ')}.`);
   const combo = COLOR_COMBOS[colorIdx];
   parts.push(`Color preference: ${combo.colors[0]} and ${combo.colors[1]}.`);
   if (customPrompt.trim()) parts.push(customPrompt.trim());
-  return parts.join(' ');
+  return parts.join(' ') || 'Suggest a casual everyday outfit.';
 }
 
 export default function HomeAIControlPanel() {
@@ -35,9 +37,17 @@ export default function HomeAIControlPanel() {
   const [scenarios, setScenarios] = useState<string[]>([]);
   const [colorIdx, setColorIdx] = useState(0);
   const [customPrompt, setCustomPrompt] = useState('');
-  const [results, setResults] = useState<UnsavedLook[]>([]);
+  const [results, setResults] = useState<RecommendationLook[]>([]);
+  const [itemMap, setItemMap] = useState<Map<string, ClothingItem>>(new Map());
+  const [member, setMember] = useState<Member | null>(null);
+  const [prompt, setPrompt] = useState('');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
+
+  // Load the first member on mount
+  useEffect(() => {
+    membersApi.getAll().then((ms) => { if (ms[0]) setMember(ms[0]); }).catch(() => {});
+  }, []);
 
   // Live timer during loading
   useEffect(() => {
@@ -52,11 +62,19 @@ export default function HomeAIControlPanel() {
     );
 
   const handleGenerate = async () => {
+    if (!member) { setError('No wardrobe members found.'); return; }
     setError('');
     setView('loading');
     try {
-      const prompt = buildPrompt(scenarios, colorIdx, customPrompt);
-      const data = await recommendationApi.generate(prompt);
+      const builtPrompt = buildPrompt(scenarios, colorIdx, customPrompt);
+      setPrompt(builtPrompt);
+      const [data, items] = await Promise.all([
+        recommendationApi.generate(member.id, builtPrompt),
+        clothingApi.getAll({ memberId: member.id } as any),
+      ]);
+      const map = new Map<string, ClothingItem>();
+      for (const item of (items as ClothingItem[])) map.set(item.id ?? item._id, item);
+      setItemMap(map);
       setResults(data.looks);
       setView('results');
     } catch (err: unknown) {
@@ -123,7 +141,14 @@ export default function HomeAIControlPanel() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {results.map((look, i) => (
-              <RecommendationCard key={i} look={look} index={i} />
+              <RecommendationCard
+                key={i}
+                look={look}
+                index={i}
+                itemMap={itemMap}
+                memberId={member?.id ?? ''}
+                prompt={prompt}
+              />
             ))}
           </div>
         </div>
