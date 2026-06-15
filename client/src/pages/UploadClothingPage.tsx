@@ -71,7 +71,7 @@ export default function UploadClothingPage() {
           <input
             value={importUrl}
             onChange={(e) => setImportUrl(e.target.value)}
-            placeholder="Paste a Zara, H&M, Uniqlo, or product page URL"
+            placeholder="Paste a product page URL or direct image URL"
             className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <button
@@ -83,7 +83,9 @@ export default function UploadClothingPage() {
           </button>
         </form>
         {importError && (
-          <div className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{importError}</div>
+          <div className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+            {importError}
+          </div>
         )}
 
         {draft && (

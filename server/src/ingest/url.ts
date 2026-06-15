@@ -29,6 +29,7 @@ interface PageMeta {
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const IMAGE_EXT_RE = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)(\?.*)?$/i;
 
 const clampIndex = (n: unknown, fallback: number) => {
   const value = Number(n);
@@ -70,6 +71,10 @@ function brandFromUrl(url: string): string | undefined {
   return token.charAt(0).toUpperCase() + token.slice(1);
 }
 
+function isLikelyImageUrl(url: string): boolean {
+  return IMAGE_EXT_RE.test(new URL(url).pathname);
+}
+
 function parseJsonLd(html: string): PageMeta {
   const scripts = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
   for (const script of scripts) {
@@ -97,8 +102,27 @@ function parseJsonLd(html: string): PageMeta {
 }
 
 async function fetchPage(url: string): Promise<PageMeta> {
-  const res = await fetch(url, { headers: { "user-agent": USER_AGENT, accept: "text/html" } });
-  if (!res.ok) throw new Error(`Could not fetch product page (${res.status})`);
+  const res = await fetch(url, {
+    headers: {
+      "user-agent": USER_AGENT,
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "accept-language": "en-US,en;q=0.9",
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+      "sec-fetch-dest": "document",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-site": "none",
+      "upgrade-insecure-requests": "1",
+    },
+  });
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        "This store blocked server-side page fetching. Try pasting the product image URL instead, or upload the image manually.",
+      );
+    }
+    throw new Error(`Could not fetch product page (${res.status})`);
+  }
   const html = await res.text();
   const jsonLd = parseJsonLd(html);
   const title = jsonLd.title ?? firstMatch(html, [
@@ -251,6 +275,17 @@ export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraf
     throw new Error("A valid product URL is required");
   }
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only http(s) URLs are supported");
+
+  if (isLikelyImageUrl(url.toString())) {
+    const imageUrl = await uploadImage(url.toString());
+    const meta: PageMeta = {
+      title: "Imported clothing item",
+      brand: brandFromUrl(url.toString()),
+      imageUrl,
+    };
+    const modelDraft = await callVisionModel(url.toString(), meta, imageUrl).catch(() => null);
+    return modelDraft ?? heuristicDraft(url.toString(), meta, imageUrl);
+  }
 
   const meta = await fetchPage(url.toString());
   const imageUrl = meta.imageUrl ? await uploadImage(meta.imageUrl) : undefined;
