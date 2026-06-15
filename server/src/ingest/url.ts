@@ -30,6 +30,65 @@ const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const IMAGE_EXT_RE = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)(\?.*)?$/i;
+const COLOR_ALIASES: Record<string, ColorFamily> = {
+  anthracite: "Gray",
+  aqua: "Blue",
+  azure: "Blue",
+  beige: "Beige",
+  black: "Black",
+  blue: "Blue",
+  blush: "Pink",
+  brown: "Brown",
+  burgundy: "Red",
+  camel: "Brown",
+  charcoal: "Gray",
+  chocolate: "Brown",
+  cobalt: "Blue",
+  copper: "Brown",
+  cream: "Beige",
+  crimson: "Red",
+  denim: "Blue",
+  ecru: "Beige",
+  emerald: "Green",
+  fuchsia: "Pink",
+  gold: "Yellow",
+  golden: "Yellow",
+  gray: "Gray",
+  green: "Green",
+  grey: "Gray",
+  indigo: "Blue",
+  ivory: "White",
+  khaki: "Beige",
+  lavender: "Purple",
+  lilac: "Purple",
+  magenta: "Pink",
+  maroon: "Red",
+  mauve: "Purple",
+  mint: "Green",
+  multicolor: "Multi",
+  multi: "Multi",
+  natural: "Beige",
+  navy: "Blue",
+  nude: "Beige",
+  oatmeal: "Beige",
+  olive: "Green",
+  orange: "Orange",
+  pink: "Pink",
+  purple: "Purple",
+  red: "Red",
+  rose: "Pink",
+  rust: "Orange",
+  sand: "Beige",
+  silver: "Gray",
+  tan: "Beige",
+  taupe: "Gray",
+  teal: "Green",
+  turquoise: "Blue",
+  violet: "Purple",
+  white: "White",
+  wine: "Red",
+  yellow: "Yellow",
+};
 
 const clampIndex = (n: unknown, fallback: number) => {
   const value = Number(n);
@@ -40,6 +99,43 @@ const clampIndex = (n: unknown, fallback: number) => {
 const enumValue = <T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] => {
   return typeof value === "string" && allowed.includes(value) ? value : fallback;
 };
+
+function words(value: string): string[] {
+  return value.toLowerCase().match(/[a-z]+/g) ?? [];
+}
+
+function normalizeColor(value: unknown): { family: ColorFamily; name?: string } | null {
+  if (typeof value !== "string") return null;
+  const exact = COLOR_ALIASES[value.trim().toLowerCase()];
+  if (exact) return { family: exact, name: value };
+  for (const word of words(value)) {
+    const family = COLOR_ALIASES[word];
+    if (family) return { family, name: value };
+  }
+  return null;
+}
+
+function colorsFromText(text: string): { family: ColorFamily; name?: string }[] {
+  const seen = new Set<ColorFamily>();
+  const colors: { family: ColorFamily; name?: string }[] = [];
+  for (const word of words(text)) {
+    const family = COLOR_ALIASES[word];
+    if (family && !seen.has(family)) {
+      seen.add(family);
+      colors.push({ family, name: word });
+    }
+  }
+  return colors.slice(0, 3);
+}
+
+function dedupeColors(colors: { family: ColorFamily; name?: string }[]): { family: ColorFamily; name?: string }[] {
+  const seen = new Set<ColorFamily>();
+  return colors.filter((color) => {
+    if (seen.has(color.family)) return false;
+    seen.add(color.family);
+    return true;
+  }).slice(0, 3);
+}
 
 function absoluteUrl(url: string, baseUrl: string): string {
   return new URL(url, baseUrl).toString();
@@ -191,7 +287,7 @@ function heuristicDraft(sourceUrl: string, meta: PageMeta, imageUrl?: string): U
     brand: meta.brand,
     category,
     subcategory: undefined,
-    colors: [{ family: "Black" }],
+    colors: colorsFromText(text).length ? colorsFromText(text) : [{ family: "Multi" }],
     pattern,
     material,
     temperatureIndex: category === "Outerwear" ? 8 : category === "Shoes" ? 5 : 4,
@@ -207,10 +303,10 @@ function parseModelDraft(sourceUrl: string, meta: PageMeta, imageUrl: string | u
   const parsed = JSON.parse(raw);
   const fallback = heuristicDraft(sourceUrl, meta, imageUrl);
   const colors = Array.isArray(parsed.colors)
-    ? parsed.colors.map((c: any) => ({
-      family: enumValue(c?.family, COLOR_FAMILIES, "Black"),
-      name: typeof c?.name === "string" ? c.name : undefined,
-    })).filter((c: any) => c.family)
+    ? dedupeColors(parsed.colors.map((c: any) => ({
+      family: normalizeColor(c?.family ?? c?.name ?? c)?.family ?? "Multi",
+      name: typeof c?.name === "string" ? c.name : typeof c?.family === "string" ? c.family : undefined,
+    })).filter((c: any) => c.family))
     : fallback.colors;
   const occasionTags = Array.isArray(parsed.occasionTags)
     ? parsed.occasionTags.map((tag: unknown) => enumValue(tag, OCCASION_TAGS, "casual"))
@@ -242,6 +338,9 @@ async function callVisionModel(sourceUrl: string, meta: PageMeta, imageUrl?: str
     "name, brand, category, subcategory, colors, pattern, material, temperatureIndex, coverageLevel, occasionTags. " +
     `Allowed category values: ${CATEGORIES.join(", ")}. ` +
     `Allowed color family values: ${COLOR_FAMILIES.join(", ")}. ` +
+    "For colors, identify the visible dominant clothing colors from the product image. " +
+    "Use colors[].family for the broad family only, and put shade names such as navy, cream, khaki, ivory, camel, or burgundy in colors[].name. " +
+    "Do not default to Black unless the item is visibly black. " +
     `Allowed pattern values: ${PATTERNS.join(", ")}. ` +
     `Allowed occasionTags: ${OCCASION_TAGS.join(", ")}. ` +
     "temperatureIndex and coverageLevel are integers 0-10.";
