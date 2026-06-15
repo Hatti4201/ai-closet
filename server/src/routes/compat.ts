@@ -80,6 +80,19 @@ const imagesFromFiles = (files: Express.Multer.File[] | undefined, mainImageInde
   return urls;
 };
 
+const imagesFromForm = (body: Record<string, unknown>, files: Express.Multer.File[] | undefined, mainImageIndex: number): string[] => {
+  const remoteImages = imagesFromBody(body.imageUrls);
+  const urls = [
+    ...remoteImages,
+    ...imagesFromFiles(files, Math.max(0, mainImageIndex - remoteImages.length)),
+  ].slice(0, 3);
+  if (mainImageIndex > 0 && mainImageIndex < urls.length) {
+    const [main] = urls.splice(mainImageIndex, 1);
+    urls.unshift(main);
+  }
+  return urls;
+};
+
 async function resolveMemberId(input?: string): Promise<string> {
   if (input) return input;
   const member = await ensureDefaultMember();
@@ -105,6 +118,7 @@ function itemPayload(body: Record<string, unknown>, memberId: string, images: st
 }
 
 const imagesFromBody = (value: unknown): string[] => {
+  if (typeof value === "string" && value.trim()) return [value.trim()];
   if (!Array.isArray(value)) return [];
   return value.filter((url): url is string => typeof url === "string" && url.trim() !== "").slice(0, 3);
 };
@@ -168,7 +182,7 @@ router.post("/clothing", upload.array("images", 3), async (req, res, next) => {
   try {
     const memberId = await resolveMemberId(one(req.body.memberId));
     const mainImageIndex = numberField(req.body.mainImageIndex, 0);
-    const images = imagesFromFiles(req.files as Express.Multer.File[] | undefined, mainImageIndex);
+    const images = imagesFromForm(req.body, req.files as Express.Multer.File[] | undefined, mainImageIndex);
     const id = `item_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
     const created = await ClothingItem.create({ _id: id, ...itemPayload(req.body, memberId, images) });
     res.status(201).json(created.toJSON());

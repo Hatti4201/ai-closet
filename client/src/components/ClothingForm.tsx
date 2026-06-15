@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { ClothingItem, Category, Pattern, Color } from '../types/clothing';
 import { CATEGORIES, PATTERNS, COLOR_FAMILIES, MATERIALS } from '../utils/constants';
 import ImageUploader from './ImageUploader';
+import { getFirstImage } from '../utils/imageUrl';
 
 interface Props {
   initial?: Partial<ClothingItem>;
   onSubmit: (formData: FormData) => Promise<void>;
   loading?: boolean;
+  remoteImages?: string[];
+  importSlot?: ReactNode;
 }
 
-export default function ClothingForm({ initial, onSubmit, loading }: Props) {
+export default function ClothingForm({ initial, onSubmit, loading, remoteImages = [], importSlot }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [category, setCategory] = useState<Category>(initial?.category ?? 'Top');
   const [subcategory, setSubcategory] = useState(initial?.subcategory ?? '');
@@ -21,6 +24,18 @@ export default function ClothingForm({ initial, onSubmit, loading }: Props) {
   const [files, setFiles] = useState<File[]>([]);
   const [mainIndex, setMainIndex] = useState(0);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setName(initial?.name ?? '');
+    setCategory(initial?.category ?? 'Top');
+    setSubcategory(initial?.subcategory ?? '');
+    setColors(initial?.colors ?? [{ family: 'Black' }]);
+    setPattern(initial?.pattern ?? 'Solid');
+    setMaterial(initial?.material ?? 'Cotton');
+    setTemperatureIndex(initial?.temperatureIndex ?? 5);
+    setCoverageLevel(initial?.coverageLevel ?? 5);
+    setMainIndex(0);
+  }, [initial]);
 
   const addColor = () => setColors([...colors, { family: 'Black' }]);
   const removeColor = (idx: number) => setColors(colors.filter((_, i) => i !== idx));
@@ -44,6 +59,7 @@ export default function ClothingForm({ initial, onSubmit, loading }: Props) {
     fd.append('temperatureIndex', String(temperatureIndex));
     fd.append('coverageLevel', String(coverageLevel));
     files.forEach((f) => fd.append('images', f));
+    remoteImages.forEach((url) => fd.append('imageUrls', url));
     fd.append('mainImageIndex', String(mainIndex));
 
     try {
@@ -60,12 +76,34 @@ export default function ClothingForm({ initial, onSubmit, loading }: Props) {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">{error}</div>
       )}
 
+      {importSlot}
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Photos</label>
+        {remoteImages.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-3">
+            {remoteImages.map((url, idx) => (
+              <div key={url} className="relative w-24 h-24">
+                <img
+                  src={getFirstImage([url])}
+                  alt=""
+                  className={`w-full h-full object-cover rounded-lg border-2 ${idx === mainIndex ? 'border-blue-500' : 'border-gray-200'}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setMainIndex(idx)}
+                  className="absolute bottom-1 left-1 right-1 text-xs bg-black/50 text-white rounded py-0.5"
+                >
+                  {idx === mainIndex ? 'Main' : 'Set main'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <ImageUploader
           files={files}
-          mainIndex={mainIndex}
-          onChange={(f, m) => { setFiles(f); setMainIndex(m); }}
+          mainIndex={Math.max(0, mainIndex - remoteImages.length)}
+          onChange={(f, m) => { setFiles(f); setMainIndex(remoteImages.length + m); }}
         />
       </div>
 
