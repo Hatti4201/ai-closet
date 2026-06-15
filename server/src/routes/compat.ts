@@ -1,14 +1,13 @@
 import { Router } from "express";
-import multer from "multer";
 import { ClothingItem } from "../models/ClothingItem";
 import { ensureDefaultMember, searchWardrobe, getItem } from "../retrieval";
+import { upload } from "../middleware/uploadMiddleware";
 import {
   CATEGORIES, COLOR_FAMILIES, PATTERNS,
   Category, ColorFamily, Pattern,
 } from "../models/enums";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { files: 3, fileSize: 8 * 1024 * 1024 } });
 
 const one = (value: unknown): string | undefined => {
   if (Array.isArray(value)) return one(value[0]);
@@ -52,7 +51,10 @@ const parseColors = (value: unknown): { family: ColorFamily; name?: string }[] =
 const imagesFromFiles = (files: Express.Multer.File[] | undefined, mainImageIndex: number): string[] => {
   if (!files?.length) return [];
   const limited = files.slice(0, 3);
-  const urls = limited.map((file) => `data:${file.mimetype};base64,${file.buffer.toString("base64")}`);
+  const urls = limited.map((file) => {
+    if (file.path) return file.path;
+    return `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
+  });
   if (mainImageIndex > 0 && mainImageIndex < urls.length) {
     const [main] = urls.splice(mainImageIndex, 1);
     urls.unshift(main);
