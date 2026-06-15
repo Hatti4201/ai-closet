@@ -1,8 +1,9 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { ClothingItem, Category, Pattern, Color } from '../types/clothing';
-import { CATEGORIES, PATTERNS, COLOR_FAMILIES, MATERIALS } from '../utils/constants';
+import { CATEGORIES, PATTERNS, MATERIALS } from '../utils/constants';
 import ImageUploader from './ImageUploader';
 import { getFirstImage } from '../utils/imageUrl';
+import ColorFamilySelect from './ColorFamilySelect';
 
 interface Props {
   initial?: Partial<ClothingItem>;
@@ -143,13 +144,10 @@ export default function ClothingForm({ initial, onSubmit, loading, remoteImages 
         <label className="block text-sm font-medium text-gray-700 mb-2">Colors *</label>
         {colors.map((color, idx) => (
           <div key={idx} className="flex gap-2 mb-2">
-            <select
+            <ColorFamilySelect
               value={color.family}
-              onChange={(e) => updateColor(idx, 'family', e.target.value)}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              {COLOR_FAMILIES.map((cf) => <option key={cf}>{cf}</option>)}
-            </select>
+              onChange={(value) => updateColor(idx, 'family', value)}
+            />
             <input
               value={color.name ?? ''}
               onChange={(e) => updateColor(idx, 'name', e.target.value)}
