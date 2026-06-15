@@ -161,6 +161,7 @@ router.get("/clothing", async (req, res, next) => {
       colorFamily: one(req.query.colorFamily) as ColorFamily | undefined,
       pattern: one(req.query.pattern) as Pattern | undefined,
       limit: numberField(req.query.limit, 50),
+      q: one(req.query.q),
     });
     res.json({ items });
   } catch (err) {
@@ -209,7 +210,7 @@ router.put("/clothing/:id", upload.array("images", 3), async (req, res, next) =>
     if (!existing) return res.status(404).json({ message: "Item not found" });
 
     const mainImageIndex = numberField(req.body.mainImageIndex, 0);
-    const nextImages = imagesFromFiles(req.files as Express.Multer.File[] | undefined, mainImageIndex);
+    const nextImages = imagesFromForm(req.body, req.files as Express.Multer.File[] | undefined, mainImageIndex);
     const payload = itemPayload(
       req.body,
       one(req.body.memberId) ?? existing.memberId,

@@ -21,13 +21,12 @@ const PHASES = [
 
 function buildPrompt(
   scenarios: string[],
-  colorIdx: number,
+  colors: [string, string],
   customPrompt: string
 ): string {
   const parts: string[] = [];
   if (scenarios.length > 0) parts.push(`Occasion: ${scenarios.join(', ')}.`);
-  const combo = COLOR_COMBOS[colorIdx];
-  parts.push(`Color preference: ${combo.colors[0]} and ${combo.colors[1]}.`);
+  parts.push(`Color preference: ${colors[0]} and ${colors[1]}.`);
   if (customPrompt.trim()) parts.push(customPrompt.trim());
   return parts.join(' ') || 'Suggest a casual everyday outfit.';
 }
@@ -36,6 +35,7 @@ export default function HomeAIControlPanel() {
   const [view, setView] = useState<View>('panel');
   const [scenarios, setScenarios] = useState<string[]>([]);
   const [colorIdx, setColorIdx] = useState(0);
+  const [colorOverrides, setColorOverrides] = useState<[string | null, string | null]>([null, null]);
   const [customPrompt, setCustomPrompt] = useState('');
   const [results, setResults] = useState<RecommendationLook[]>([]);
   const [itemMap, setItemMap] = useState<Map<string, ClothingItem>>(new Map());
@@ -65,12 +65,30 @@ export default function HomeAIControlPanel() {
       prev.includes(chip) ? prev.filter((s) => s !== chip) : [...prev, chip]
     );
 
+  const currentColors: [string, string] = [
+    colorOverrides[0] ?? COLOR_COMBOS[colorIdx].colors[0],
+    colorOverrides[1] ?? COLOR_COMBOS[colorIdx].colors[1],
+  ];
+
+  const handleColorIdxChange = (idx: number) => {
+    setColorIdx(idx);
+    setColorOverrides([null, null]);
+  };
+
+  const handleColorOverrideChange = (slot: number, color: string | null) => {
+    setColorOverrides((prev) => {
+      const next: [string | null, string | null] = [...prev] as [string | null, string | null];
+      next[slot] = color;
+      return next;
+    });
+  };
+
   const handleGenerate = async () => {
     if (!member) { setError('No wardrobe members found.'); return; }
     setError('');
     setView('loading');
     try {
-      const builtPrompt = buildPrompt(scenarios, colorIdx, customPrompt);
+      const builtPrompt = buildPrompt(scenarios, currentColors, customPrompt);
       setPrompt(builtPrompt);
       const [data, items] = await Promise.all([
         recommendationApi.generate(member.id, builtPrompt, coords ?? undefined),
@@ -138,7 +156,7 @@ export default function HomeAIControlPanel() {
               <p className="text-sm text-gray-400 mt-0.5">
                 {scenarios.length > 0 ? scenarios.join(' · ') : 'AI Generated'}
                 {' · '}
-                {COLOR_COMBOS[colorIdx].colors.join(' + ')}
+                {currentColors.join(' + ')}
               </p>
             </div>
           </div>
@@ -170,7 +188,12 @@ export default function HomeAIControlPanel() {
       {/* Four quadrants */}
       <WeatherQuadrant lat={coords?.lat ?? null} lon={coords?.lon ?? null} />
       <ScenarioSelector selected={scenarios} onToggle={toggleScenario} />
-      <ColorComboSelector idx={colorIdx} onChange={setColorIdx} />
+      <ColorComboSelector
+        idx={colorIdx}
+        onChange={handleColorIdxChange}
+        overrides={colorOverrides}
+        onOverrideChange={handleColorOverrideChange}
+      />
       <VoicePromptInput value={customPrompt} onChange={setCustomPrompt} />
 
       {/* Center Generate button */}

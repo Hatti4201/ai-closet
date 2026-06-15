@@ -24,6 +24,7 @@ router.get("/", async (req, res, next) => {
       coverageMin: num(q.coverageMin),
       coverageMax: num(q.coverageMax),
       limit: num(q.limit),
+      q: str(q.q),
     };
     res.json(await searchWardrobe(params));
   } catch (err) {

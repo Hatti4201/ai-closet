@@ -9,6 +9,7 @@ export default function WardrobePage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [filters, setFilters] = useState<ClothingFilters>({});
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchItems = async () => {
@@ -23,6 +24,13 @@ export default function WardrobePage() {
 
   useEffect(() => { fetchItems(); }, [JSON.stringify(filters)]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters((prev) => ({ ...prev, q: search.trim() || undefined }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -33,6 +41,16 @@ export default function WardrobePage() {
         >
           + Add Item
         </button>
+      </div>
+
+      <div className="mb-6">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, brand, category, color, material..."
+          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
       </div>
 
       <div className="flex gap-6">

@@ -30,6 +30,7 @@ export interface ClothingItem {
 }
 
 export interface ClothingFilters {
+  q?: string;
   category?: Category;
   colorFamily?: string;
   pattern?: Pattern;

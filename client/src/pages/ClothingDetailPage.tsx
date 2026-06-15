@@ -45,7 +45,12 @@ export default function ClothingDetailPage() {
         </button>
         <h1 className="text-2xl font-semibold text-gray-900 mb-6">Edit Item</h1>
         <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <ClothingForm initial={item} onSubmit={handleUpdate} loading={loading} />
+          <ClothingForm
+            initial={item}
+            onSubmit={handleUpdate}
+            loading={loading}
+            remoteImages={item.images.map((img) => (typeof img === 'string' ? img : img.url))}
+          />
         </div>
       </div>
     );
@@ -94,6 +99,12 @@ export default function ClothingDetailPage() {
           </div>
 
           <dl className="grid grid-cols-2 gap-4 text-sm">
+            {item.brand && (
+              <div>
+                <dt className="text-gray-500">Brand</dt>
+                <dd className="font-medium text-gray-900">{item.brand}</dd>
+              </div>
+            )}
             <div>
               <dt className="text-gray-500">Category</dt>
               <dd className="font-medium text-gray-900">{item.category}</dd>

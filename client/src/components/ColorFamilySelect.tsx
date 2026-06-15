@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { COLOR_FAMILIES } from '../utils/constants';
 
-const COLOR_SWATCHES: Record<string, string> = {
+export const COLOR_SWATCHES: Record<string, string> = {
   Black: '#111827',
   White: '#ffffff',
   Gray: '#9ca3af',

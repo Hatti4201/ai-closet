@@ -36,6 +36,7 @@ export default function ClothingCard({ item, onDeleted }: Props) {
       </div>
       <div className="p-3">
         <p className="font-medium text-gray-900 truncate">{item.name}</p>
+        {item.brand && <p className="text-xs text-gray-400 truncate">{item.brand}</p>}
         <p className="text-xs text-gray-500 mt-0.5">{item.category} · {item.colors[0]?.family}</p>
         <p className="text-xs text-gray-400">{item.pattern} · {item.material}</p>
         <div className="flex gap-2 mt-3">

@@ -45,6 +45,21 @@ export async function searchWardrobe(params: SearchWardrobeParams = {}) {
   if (params.coverageMax != null) cov.$lte = params.coverageMax;
   if (Object.keys(cov).length) filter.coverageLevel = cov;
 
+  if (params.q && params.q.trim()) {
+    const re = new RegExp(params.q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    filter.$or = [
+      { name: re },
+      { brand: re },
+      { category: re },
+      { subcategory: re },
+      { material: re },
+      { pattern: re },
+      { "colors.family": re },
+      { "colors.name": re },
+      { occasionTags: re },
+    ];
+  }
+
   const limit = params.limit && params.limit > 0 ? params.limit : DEFAULT_LIMIT;
   const docs = await ClothingItem.find(filter).limit(limit);
   return docs.map((d) => d.toJSON());

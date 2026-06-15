@@ -12,6 +12,7 @@ export interface SearchWardrobeParams {
   coverageMax?: number;
   occasion?: OccasionTag;
   limit?: number; // default 50
+  q?: string; // free-text keyword search across name, brand, category, subcategory, material, colors, pattern, occasionTags
 }
 
 export type Season = "spring" | "summer" | "fall" | "winter";
