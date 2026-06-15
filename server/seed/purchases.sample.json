@@ -1,0 +1,38 @@
+[
+  {
+    "memberId": "mem_001",
+    "purchasedAt": "2025-06-01",
+    "product": {
+      "title": "Men's Long Sleeve Oxford Shirt - Light Blue",
+      "brand": "Uniqlo",
+      "category": "shirt",
+      "color": "light blue",
+      "material": "100% Cotton",
+      "imageUrl": "https://example.com/oxford-lightblue.jpg"
+    }
+  },
+  {
+    "memberId": "mem_001",
+    "purchasedAt": "2025-06-03",
+    "product": {
+      "title": "Slim Fit Stretch Jeans - Black",
+      "brand": "Levi's",
+      "category": "jeans",
+      "color": "black",
+      "material": "98% Cotton 2% Elastane",
+      "imageUrl": "https://example.com/jeans-black.jpg"
+    }
+  },
+  {
+    "memberId": "mem_002",
+    "purchasedAt": "2025-06-05",
+    "product": {
+      "title": "Wool Blend Double-Breasted Coat - Camel",
+      "brand": "Max Mara",
+      "category": "coat",
+      "color": "camel",
+      "material": "70% Wool 30% Polyester",
+      "imageUrl": "https://example.com/coat-camel.jpg"
+    }
+  }
+]
