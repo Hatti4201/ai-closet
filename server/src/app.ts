@@ -4,6 +4,7 @@ import membersRouter from "./routes/members";
 import wardrobeRouter from "./routes/wardrobe";
 import looksRouter from "./routes/looks";
 import ingestRouter from "./routes/ingest";
+import recommendRouter from "./routes/recommend";
 
 /**
  * Express assembly point — the ONE file Backend A and B both touch.
@@ -25,7 +26,7 @@ export function createApp(): Express {
   app.use("/api/wardrobe", wardrobeRouter); // A-P2 — read: GET /api/wardrobe[/:id]
   app.use("/api/looks", looksRouter); // A-P4 — write: POST /api/looks
   app.use("/api/ingest", ingestRouter); // A-P4 — write (dev): POST /api/ingest
-  // app.use("/api", recommendRouter);            // B — POST /api/recommend (B adds this line)
+  app.use("/api", recommendRouter);              // C — POST /api/recommend
 
   // 404
   app.use((_req: Request, res: Response) => {
