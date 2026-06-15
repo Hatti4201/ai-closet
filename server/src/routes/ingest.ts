@@ -1,10 +1,21 @@
 import { Router } from "express";
 import { ingestPurchases } from "../ingest";
 import { PurchaseEvent } from "../ingest/types";
+import { ingestProductUrl } from "../ingest/url";
 
 // POST /api/ingest   (dev only) mock purchase feed -> { inserted, ids }
 // Body: a PurchaseEvent[] OR { events: PurchaseEvent[] }.
 const router = Router();
+
+router.post("/url", async (req, res, next) => {
+  try {
+    const url = typeof req.body?.url === "string" ? req.body.url.trim() : "";
+    if (!url) return res.status(400).json({ message: "url is required" });
+    res.json(await ingestProductUrl(url));
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post("/", async (req, res, next) => {
   try {

@@ -3,8 +3,8 @@ import { ClothingItem } from "../models/ClothingItem";
 import { ensureDefaultMember, searchWardrobe, getItem } from "../retrieval";
 import { upload } from "../middleware/uploadMiddleware";
 import {
-  CATEGORIES, COLOR_FAMILIES, PATTERNS,
-  Category, ColorFamily, Pattern,
+  CATEGORIES, COLOR_FAMILIES, PATTERNS, OCCASION_TAGS,
+  Category, ColorFamily, Pattern, OccasionTag,
 } from "../models/enums";
 
 const router = Router();
@@ -25,6 +25,16 @@ const enumField = <T extends readonly string[]>(value: unknown, allowed: T, fall
 };
 
 const parseColors = (value: unknown): { family: ColorFamily; name?: string }[] => {
+  if (Array.isArray(value)) {
+    const colors = value
+      .map((c) => ({
+        family: enumField((c as any)?.family, COLOR_FAMILIES, "Black"),
+        name: typeof (c as any)?.name === "string" && (c as any).name.trim() ? (c as any).name.trim() : undefined,
+      }))
+      .filter((c) => c.family);
+    if (colors.length) return colors;
+  }
+
   const raw = one(value);
   if (!raw) return [{ family: "Black" }];
 
@@ -46,6 +56,14 @@ const parseColors = (value: unknown): { family: ColorFamily; name?: string }[] =
   return raw.split(",").map((part) => ({
     family: enumField(part.trim(), COLOR_FAMILIES, "Black"),
   }));
+};
+
+const parseOccasionTags = (value: unknown): OccasionTag[] => {
+  const raw = Array.isArray(value) ? value : one(value)?.split(",");
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((tag) => enumField(typeof tag === "string" ? tag.trim() : tag, OCCASION_TAGS, "casual"))
+    .filter((tag, idx, all) => all.indexOf(tag) === idx);
 };
 
 const imagesFromFiles = (files: Express.Multer.File[] | undefined, mainImageIndex: number): string[] => {
@@ -80,11 +98,16 @@ function itemPayload(body: Record<string, unknown>, memberId: string, images: st
     material: one(body.material) ?? "Unknown",
     temperatureIndex: numberField(body.temperatureIndex, 5),
     coverageLevel: numberField(body.coverageLevel, 5),
-    occasionTags: [],
+    occasionTags: parseOccasionTags(body.occasionTags),
     source: "manual" as const,
     images,
   };
 }
+
+const imagesFromBody = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((url): url is string => typeof url === "string" && url.trim() !== "").slice(0, 3);
+};
 
 router.post("/auth/register", async (req, res, next) => {
   try {
@@ -146,6 +169,18 @@ router.post("/clothing", upload.array("images", 3), async (req, res, next) => {
     const memberId = await resolveMemberId(one(req.body.memberId));
     const mainImageIndex = numberField(req.body.mainImageIndex, 0);
     const images = imagesFromFiles(req.files as Express.Multer.File[] | undefined, mainImageIndex);
+    const id = `item_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+    const created = await ClothingItem.create({ _id: id, ...itemPayload(req.body, memberId, images) });
+    res.status(201).json(created.toJSON());
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/clothing/import", async (req, res, next) => {
+  try {
+    const memberId = await resolveMemberId(one(req.body.memberId));
+    const images = imagesFromBody(req.body.images);
     const id = `item_${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
     const created = await ClothingItem.create({ _id: id, ...itemPayload(req.body, memberId, images) });
     res.status(201).json(created.toJSON());
