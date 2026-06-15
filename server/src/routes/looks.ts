@@ -6,7 +6,7 @@ import { saveLook } from "../retrieval";
 const router = Router();
 
 // Helper: attach populated items[] to look JSON
-async function populate(look: { id: string; itemIds: string[]; [k: string]: any }) {
+async function populate(look: { id?: string; _id?: string; itemIds: string[]; [k: string]: any }) {
   const docs = await ClothingItem.find({ _id: { $in: look.itemIds } });
   const map = new Map(docs.map((d) => [d._id.toString(), d.toJSON()]));
   return {

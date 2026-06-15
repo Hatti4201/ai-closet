@@ -40,13 +40,17 @@ export default function HomeAIControlPanel() {
   const [results, setResults] = useState<RecommendationLook[]>([]);
   const [itemMap, setItemMap] = useState<Map<string, ClothingItem>>(new Map());
   const [member, setMember] = useState<Member | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [prompt, setPrompt] = useState('');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
 
-  // Load the first member on mount
   useEffect(() => {
     membersApi.getAll().then((ms) => { if (ms[0]) setMember(ms[0]); }).catch(() => {});
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => {},  // permission denied or unavailable — weather falls back to season mock
+    );
   }, []);
 
   // Live timer during loading
@@ -69,7 +73,7 @@ export default function HomeAIControlPanel() {
       const builtPrompt = buildPrompt(scenarios, colorIdx, customPrompt);
       setPrompt(builtPrompt);
       const [data, items] = await Promise.all([
-        recommendationApi.generate(member.id, builtPrompt),
+        recommendationApi.generate(member.id, builtPrompt, coords ?? undefined),
         clothingApi.getAll({ memberId: member.id } as any),
       ]);
       const map = new Map<string, ClothingItem>();
@@ -164,7 +168,7 @@ export default function HomeAIControlPanel() {
       <div className="absolute inset-x-0 top-1/2 h-px bg-gray-200 -translate-y-px pointer-events-none" />
 
       {/* Four quadrants */}
-      <WeatherQuadrant />
+      <WeatherQuadrant lat={coords?.lat ?? null} lon={coords?.lon ?? null} />
       <ScenarioSelector selected={scenarios} onToggle={toggleScenario} />
       <ColorComboSelector idx={colorIdx} onChange={setColorIdx} />
       <VoicePromptInput value={customPrompt} onChange={setCustomPrompt} />

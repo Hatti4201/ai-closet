@@ -6,7 +6,7 @@ const router = Router();
 
 router.post("/recommend", async (req: Request, res: Response) => {
   try {
-    const { memberId, prompt } = req.body ?? {};
+    const { memberId, prompt, lat, lon } = req.body ?? {};
 
     if (!memberId || typeof memberId !== "string") {
       return res.status(400).json({ message: "memberId is required" });
@@ -20,7 +20,8 @@ router.post("/recommend", async (req: Request, res: Response) => {
       return res.status(404).json({ message: `Member "${memberId}" not found` });
     }
 
-    const result = await runOrchestrator(memberId, prompt);
+    const location = (typeof lat === "number" && typeof lon === "number") ? `${lat},${lon}` : undefined;
+    const result = await runOrchestrator(memberId, prompt, location);
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ message: err?.message ?? "Internal error" });

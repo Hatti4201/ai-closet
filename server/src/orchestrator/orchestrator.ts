@@ -130,8 +130,8 @@ async function dispatchTool(name: string, args: any, seenItemIds: Set<string>): 
 }
 
 /** Stub mode: no LLM configured — return a hardcoded result immediately. */
-async function stubResult(memberId: string, prompt: string): Promise<RecommendationResult> {
-  const context = await getContext({});
+async function stubResult(memberId: string, prompt: string, location?: string): Promise<RecommendationResult> {
+  const context = await getContext(location ? { location } : {});
   const fallbackLooks = await codeFallback(memberId, new Set());
   return { prompt, context, looks: fallbackLooks };
 }
@@ -172,17 +172,18 @@ const RETRY_MSG =
 export async function runOrchestrator(
   memberId: string,
   userPrompt: string,
+  location?: string,
 ): Promise<RecommendationResult> {
   // Stub mode — no LLM URL configured
   if (!llmBaseUrl()) {
-    return stubResult(memberId, userPrompt);
+    return stubResult(memberId, userPrompt, location);
   }
 
-  const context = await getContext({});
+  const context = await getContext(location ? { location } : {});
   const seenItemIds = new Set<string>();
 
   const messages: Message[] = [
-    { role: "system", content: buildSystemPrompt(memberId) },
+    { role: "system", content: buildSystemPrompt(memberId, context) },
     { role: "user", content: userPrompt },
   ];
 

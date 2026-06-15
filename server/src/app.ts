@@ -5,6 +5,7 @@ import wardrobeRouter from "./routes/wardrobe";
 import looksRouter from "./routes/looks";
 import ingestRouter from "./routes/ingest";
 import recommendRouter from "./routes/recommend";
+import contextRouter from "./routes/context";
 
 /**
  * Express assembly point — the ONE file Backend A and B both touch.
@@ -27,6 +28,7 @@ export function createApp(): Express {
   app.use("/api/looks", looksRouter); // A-P4 — write: POST /api/looks
   app.use("/api/ingest", ingestRouter); // A-P4 — write (dev): POST /api/ingest
   app.use("/api", recommendRouter);              // C — POST /api/recommend
+  app.use("/api/context", contextRouter);        // C — GET /api/context?lat=&lon=
 
   // 404
   app.use((_req: Request, res: Response) => {

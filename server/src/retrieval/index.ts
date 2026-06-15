@@ -77,15 +77,41 @@ export async function getPreferenceProfile(params: { memberId: string }): Promis
   };
 }
 
-/** get_context — MVP mock: date/season derived, weather stubbed (real weather API later). */
+/** get_context — real weather via Open-Meteo when location="lat,lon" is provided; season mock otherwise. */
 export async function getContext(params: { date?: string; location?: string } = {}): Promise<ContextInfo> {
   const d = params.date ? new Date(params.date) : new Date();
   const season = seasonForMonth(d.getUTCMonth());
+  const weather = params.location
+    ? await fetchWeather(params.location).catch(() => mockWeather(season))
+    : mockWeather(season);
+  return { date: d.toISOString().slice(0, 10), season, weather };
+}
+
+async function fetchWeather(location: string): Promise<{ tempC: number; condition: string }> {
+  const [lat, lon] = location.split(",").map(Number);
+  if (isNaN(lat) || isNaN(lon)) throw new Error("bad coords");
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,weather_code&temperature_unit=celsius`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`open-meteo ${res.status}`);
+  const data: any = await res.json();
   return {
-    date: d.toISOString().slice(0, 10),
-    season,
-    weather: mockWeather(season),
+    tempC: Math.round(data.current.temperature_2m),
+    condition: wmoCondition(data.current.weather_code),
   };
+}
+
+function wmoCondition(code: number): string {
+  if (code === 0) return "sunny";
+  if (code <= 2) return "partly cloudy";
+  if (code <= 3) return "cloudy";
+  if (code <= 48) return "foggy";
+  if (code <= 67) return "rain";
+  if (code <= 77) return "snow";
+  if (code <= 82) return "rain showers";
+  return "stormy";
 }
 
 /** save_look — persist an accepted outfit. Returns the new look id. */
@@ -95,12 +121,12 @@ export async function saveLook(params: SaveLookParams): Promise<{ id: string }> 
   return { id };
 }
 
-// --- helpers (northern-hemisphere mock) ---
+// --- helpers ---
 function seasonForMonth(month: number): Season {
-  if (month === 11 || month <= 1) return "winter"; // Dec, Jan, Feb
-  if (month <= 4) return "spring"; // Mar–May
-  if (month <= 7) return "summer"; // Jun–Aug
-  return "fall"; // Sep–Nov
+  if (month === 11 || month <= 1) return "winter";
+  if (month <= 4) return "spring";
+  if (month <= 7) return "summer";
+  return "fall";
 }
 
 function mockWeather(season: Season): { tempC: number; condition: string } {
@@ -108,6 +134,6 @@ function mockWeather(season: Season): { tempC: number; condition: string } {
     case "winter": return { tempC: 3, condition: "cloudy" };
     case "spring": return { tempC: 16, condition: "sunny" };
     case "summer": return { tempC: 28, condition: "sunny" };
-    case "fall": return { tempC: 14, condition: "windy" };
+    case "fall":   return { tempC: 14, condition: "windy" };
   }
 }

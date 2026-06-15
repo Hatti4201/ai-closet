@@ -2,8 +2,12 @@ import api from './authApi';
 import { RecommendationResult, SavedLook } from '../types/look';
 
 export const recommendationApi = {
-  generate: (memberId: string, prompt: string): Promise<RecommendationResult> =>
-    api.post<RecommendationResult>('/recommend', { memberId, prompt }).then((r) => r.data),
+  generate: (
+    memberId: string,
+    prompt: string,
+    coords?: { lat: number; lon: number },
+  ): Promise<RecommendationResult> =>
+    api.post<RecommendationResult>('/recommend', { memberId, prompt, ...coords }).then((r) => r.data),
 
   saveLook: (params: {
     memberId: string;
