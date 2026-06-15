@@ -12,3 +12,9 @@ export function getFirstImage(images: (string | { url: string; isMain?: boolean 
   const first = images[0];
   return typeof first === 'string' ? getImageUrl(first) : getImageUrl(first.url);
 }
+
+export function getMainImage(images: (string | { url: string; isMain?: boolean })[] | undefined): string {
+  if (!images || images.length === 0) return '';
+  const main = images.find((img) => typeof img !== 'string' && img.isMain) ?? images[0];
+  return typeof main === 'string' ? getImageUrl(main) : getImageUrl(main.url);
+}

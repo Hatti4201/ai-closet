@@ -61,8 +61,8 @@ export default function ClothingDetailPage() {
         <div className="flex gap-3 p-4 overflow-x-auto">
           {item.images.map((img, idx) => (
             <div key={idx} className="shrink-0 w-40 h-40 bg-gray-100 rounded-xl overflow-hidden relative">
-              <img src={getImageUrl(img.url)} alt="" className="w-full h-full object-cover" />
-              {img.isMain && (
+              <img src={getImageUrl(typeof img === 'string' ? img : img.url)} alt="" className="w-full h-full object-cover" />
+              {typeof img !== 'string' && img.isMain && (
                 <span className="absolute top-2 left-2 bg-gray-900 text-white text-xs px-2 py-0.5 rounded-full">
                   Main
                 </span>

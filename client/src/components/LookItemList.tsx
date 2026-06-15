@@ -1,4 +1,5 @@
 import { LookItem } from '../types/look';
+import { getMainImage } from '../utils/imageUrl';
 
 interface Props {
   items: LookItem[];
@@ -11,7 +12,7 @@ export default function LookItemList({ items, selectedIdx, onSelect, onRemove }:
   return (
     <div className="space-y-2">
       {items.map((item, idx) => {
-        const img = item.clothingItem?.images?.find((i) => i.isMain) || item.clothingItem?.images?.[0];
+        const img = getMainImage(item.clothingItem?.images);
         return (
           <div
             key={idx}
@@ -22,7 +23,7 @@ export default function LookItemList({ items, selectedIdx, onSelect, onRemove }:
           >
             <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
               {img ? (
-                <img src={img.url} alt="" className="w-full h-full object-cover" />
+                <img src={img} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-300">?</div>
               )}

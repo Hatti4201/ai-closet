@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { recommendationApi } from '../api/recommendationApi';
-import { UnsavedLook } from '../types/look';
+import { membersApi } from '../api/membersApi';
+import { RecommendationLook } from '../types/look';
 
 interface Props {
-  onLooksGenerated: (looks: UnsavedLook[]) => void;
+  onLooksGenerated: (looks: RecommendationLook[]) => void;
 }
 
 const PHASES = [
@@ -23,6 +24,13 @@ export default function AIChatEntry({ onLooksGenerated }: Props) {
   const [loading, setLoading] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
+  const [memberId, setMemberId] = useState('');
+
+  useEffect(() => {
+    membersApi.getAll()
+      .then((members) => setMemberId(members[0]?.id ?? ''))
+      .catch(() => setMemberId(''));
+  }, []);
 
   // Count up every second while loading
   useEffect(() => {
@@ -37,13 +45,14 @@ export default function AIChatEntry({ onLooksGenerated }: Props) {
     setError('');
     setLoading(true);
     try {
-      const data = await recommendationApi.generate(prompt);
+      if (!memberId) throw new Error('No wardrobe members found');
+      const data = await recommendationApi.generate(memberId, prompt);
       onLooksGenerated(data.looks);
       setOpen(false);
       setPrompt('');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(msg || 'Failed to generate looks');
+      setError(msg || (err instanceof Error ? err.message : 'Failed to generate looks'));
     } finally {
       setLoading(false);
     }
