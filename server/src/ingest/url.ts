@@ -137,6 +137,103 @@ function dedupeColors(colors: { family: ColorFamily; name?: string }[]): { famil
   }).slice(0, 3);
 }
 
+function textHas(text: string, pattern: RegExp): boolean {
+  return pattern.test(text.toLowerCase());
+}
+
+function clampRange(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function calibrateWarmth(params: {
+  category: Category;
+  subcategory?: string;
+  material?: string;
+  title?: string;
+  description?: string;
+  temperatureIndex: number;
+  coverageLevel: number;
+}): { temperatureIndex: number; coverageLevel: number } {
+  const text = `${params.title ?? ""} ${params.description ?? ""} ${params.subcategory ?? ""} ${params.material ?? ""}`.toLowerCase();
+  const material = params.material?.toLowerCase() ?? "";
+
+  let tempMin = 0;
+  let tempMax = 10;
+  let covMin = 0;
+  let covMax = 10;
+
+  switch (params.category) {
+    case "Shoes":
+      tempMin = 1; tempMax = 6; covMin = 2; covMax = 7;
+      if (textHas(text, /sandal|slide|flip\s?flop|open toe|espadrille/)) {
+        tempMin = 0; tempMax = 3; covMin = 1; covMax = 4;
+      } else if (textHas(text, /boot|ankle boot|chelsea|snow|winter/)) {
+        tempMin = 5; tempMax = 8; covMin = 5; covMax = 8;
+      }
+      break;
+    case "Bottom":
+      tempMin = 2; tempMax = 7; covMin = 4; covMax = 9;
+      if (textHas(text, /short|bermuda|skort/)) {
+        tempMin = 0; tempMax = 3; covMin = 2; covMax = 4;
+      } else if (textHas(text, /jean|denim|trouser|pant|legging/)) {
+        tempMin = 4; tempMax = 7; covMin = 7; covMax = 9;
+      } else if (textHas(text, /skirt|mini/)) {
+        tempMin = 1; tempMax = 5; covMin = 3; covMax = 6;
+      }
+      break;
+    case "Top":
+      tempMin = 1; tempMax = 7; covMin = 3; covMax = 8;
+      if (textHas(text, /tank|camisole|crop|sleeveless|vest top/)) {
+        tempMin = 0; tempMax = 3; covMin = 1; covMax = 4;
+      } else if (textHas(text, /t-?shirt|tee|polo|linen/)) {
+        tempMin = 1; tempMax = 4; covMin = 3; covMax = 5;
+      } else if (textHas(text, /sweater|jumper|hoodie|sweatshirt|fleece|knit/)) {
+        tempMin = 6; tempMax = 9; covMin = 6; covMax = 8;
+      } else if (textHas(text, /shirt|blouse|long sleeve/)) {
+        tempMin = 3; tempMax = 6; covMin = 5; covMax = 7;
+      }
+      break;
+    case "Outerwear":
+      tempMin = 5; tempMax = 10; covMin = 7; covMax = 10;
+      if (textHas(text, /trench|rain|windbreaker|lightweight|linen/)) {
+        tempMin = 5; tempMax = 7; covMin = 7; covMax = 9;
+      } else if (textHas(text, /puffer|down|parka|wool|winter/)) {
+        tempMin = 8; tempMax = 10; covMin = 8; covMax = 10;
+      }
+      break;
+    case "Dress":
+      tempMin = 2; tempMax = 7; covMin = 4; covMax = 8;
+      if (textHas(text, /sundress|mini|sleeveless|linen|summer/)) {
+        tempMin = 1; tempMax = 4; covMin = 3; covMax = 5;
+      } else if (textHas(text, /knit|sweater|wool|long sleeve/)) {
+        tempMin = 5; tempMax = 8; covMin = 6; covMax = 8;
+      }
+      break;
+    case "Accessory":
+      tempMin = 0; tempMax = 4; covMin = 0; covMax = 3;
+      if (textHas(text, /scarf|beanie|glove|wool|cashmere/)) {
+        tempMin = 4; tempMax = 7; covMin = 1; covMax = 4;
+      }
+      break;
+  }
+
+  if (/(wool|cashmere|fleece|down|quilt|thermal)/.test(material)) {
+    tempMin = Math.max(tempMin, 6);
+    tempMax = Math.max(tempMax, 8);
+  }
+  if (/(linen|mesh|chiffon|viscose|rayon)/.test(material)) {
+    tempMax = Math.min(tempMax, 4);
+  }
+  if (/(leather|suede|denim)/.test(material) && params.category !== "Shoes") {
+    tempMin = Math.max(tempMin, 4);
+  }
+
+  return {
+    temperatureIndex: clampRange(params.temperatureIndex, tempMin, tempMax),
+    coverageLevel: clampRange(params.coverageLevel, covMin, covMax),
+  };
+}
+
 function absoluteUrl(url: string, baseUrl: string): string {
   return new URL(url, baseUrl).toString();
 }
@@ -280,6 +377,15 @@ function heuristicDraft(sourceUrl: string, meta: PageMeta, imageUrl?: string): U
     /denim/.test(text) ? "Denim" :
     /leather/.test(text) ? "Leather" :
     undefined;
+  const warm = calibrateWarmth({
+    category,
+    subcategory: undefined,
+    material,
+    title: meta.title,
+    description: meta.description,
+    temperatureIndex: category === "Outerwear" ? 8 : category === "Shoes" ? 5 : 4,
+    coverageLevel: category === "Accessory" ? 1 : category === "Shoes" ? 5 : 6,
+  });
 
   return {
     sourceUrl,
@@ -290,8 +396,8 @@ function heuristicDraft(sourceUrl: string, meta: PageMeta, imageUrl?: string): U
     colors: colorsFromText(text).length ? colorsFromText(text) : [{ family: "Multi" }],
     pattern,
     material,
-    temperatureIndex: category === "Outerwear" ? 8 : category === "Shoes" ? 5 : 4,
-    coverageLevel: category === "Accessory" ? 1 : category === "Shoes" ? 5 : 6,
+    temperatureIndex: warm.temperatureIndex,
+    coverageLevel: warm.coverageLevel,
     occasionTags: ["casual"],
     images: imageUrl ? [imageUrl] : [],
   };
@@ -311,18 +417,30 @@ function parseModelDraft(sourceUrl: string, meta: PageMeta, imageUrl: string | u
   const occasionTags = Array.isArray(parsed.occasionTags)
     ? parsed.occasionTags.map((tag: unknown) => enumValue(tag, OCCASION_TAGS, "casual"))
     : fallback.occasionTags;
+  const category = enumValue(parsed.category, CATEGORIES, fallback.category);
+  const subcategory = typeof parsed.subcategory === "string" ? parsed.subcategory : fallback.subcategory;
+  const material = typeof parsed.material === "string" ? parsed.material : fallback.material;
+  const warm = calibrateWarmth({
+    category,
+    subcategory,
+    material,
+    title: typeof parsed.name === "string" ? parsed.name : fallback.name,
+    description: meta.description,
+    temperatureIndex: clampIndex(parsed.temperatureIndex, fallback.temperatureIndex),
+    coverageLevel: clampIndex(parsed.coverageLevel, fallback.coverageLevel),
+  });
 
   return {
     ...fallback,
     name: typeof parsed.name === "string" && parsed.name.trim() ? parsed.name.trim() : fallback.name,
     brand: typeof parsed.brand === "string" && parsed.brand.trim() ? parsed.brand.trim() : fallback.brand,
-    category: enumValue(parsed.category, CATEGORIES, fallback.category),
-    subcategory: typeof parsed.subcategory === "string" ? parsed.subcategory : fallback.subcategory,
+    category,
+    subcategory,
     colors: colors.length ? colors : fallback.colors,
     pattern: enumValue(parsed.pattern, PATTERNS, fallback.pattern),
-    material: typeof parsed.material === "string" ? parsed.material : fallback.material,
-    temperatureIndex: clampIndex(parsed.temperatureIndex, fallback.temperatureIndex),
-    coverageLevel: clampIndex(parsed.coverageLevel, fallback.coverageLevel),
+    material,
+    temperatureIndex: warm.temperatureIndex,
+    coverageLevel: warm.coverageLevel,
     occasionTags: occasionTags.length ? occasionTags : fallback.occasionTags,
     images: imageUrl ? [imageUrl] : [],
   };
@@ -343,7 +461,12 @@ async function callVisionModel(sourceUrl: string, meta: PageMeta, imageUrl?: str
     "Do not default to Black unless the item is visibly black. " +
     `Allowed pattern values: ${PATTERNS.join(", ")}. ` +
     `Allowed occasionTags: ${OCCASION_TAGS.join(", ")}. ` +
-    "temperatureIndex and coverageLevel are integers 0-10.";
+    "temperatureIndex is NOT weather suitability. It means warmth/insulation/heaviness: " +
+    "0-2 very light hot-weather items such as sandals, tank tops, shorts; " +
+    "3-5 medium items such as shirts, light trousers, sneakers; " +
+    "6-8 warm items such as sweaters, hoodies, boots, wool; " +
+    "9-10 heavy winter outerwear only. " +
+    "coverageLevel means body coverage: sandals/shorts low, full trousers/long sleeves medium-high, coats high.";
 
   const content: any[] = [
     { type: "text", text: `${prompt}\nProduct URL: ${sourceUrl}\nTitle: ${meta.title ?? ""}\nBrand: ${meta.brand ?? ""}\nDescription: ${meta.description ?? ""}` },
