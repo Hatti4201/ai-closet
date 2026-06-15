@@ -99,18 +99,23 @@ const TOOLS = [
 ];
 
 type Message = { role: string; content: string | null; tool_call_id?: string; tool_calls?: any[] };
+const itemIdOf = (item: any): string | undefined => item?.id ?? item?._id;
 
 async function dispatchTool(name: string, args: any, seenItemIds: Set<string>): Promise<string> {
   try {
     switch (name) {
       case "search_wardrobe": {
         const items = await searchWardrobe(args);
-        for (const it of items) seenItemIds.add(String(it._id));
+        for (const it of items) {
+          const id = itemIdOf(it);
+          if (id) seenItemIds.add(String(id));
+        }
         return JSON.stringify(items);
       }
       case "get_item": {
         const item = await getItem(args);
-        if (item) seenItemIds.add(String(item._id));
+        const id = itemIdOf(item);
+        if (id) seenItemIds.add(String(id));
         return JSON.stringify(item);
       }
       case "get_preference_profile":
@@ -137,7 +142,7 @@ async function stubResult(memberId: string, prompt: string, location?: string): 
 }
 
 function llmBaseUrl(): string | null {
-  return process.env.LLM_BASE_URL ?? null;
+  return process.env.LLM_BASE_URL ?? process.env.AI_BASE_URL ?? null;
 }
 
 async function callLLM(messages: Message[]): Promise<any> {
@@ -147,10 +152,10 @@ async function callLLM(messages: Message[]): Promise<any> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.LLM_API_KEY ?? ""}`,
+      Authorization: `Bearer ${process.env.LLM_API_KEY ?? process.env.AI_API_KEY ?? ""}`,
     },
     body: JSON.stringify({
-      model: process.env.LLM_MODEL ?? "gpt-4o-mini",
+      model: process.env.LLM_MODEL ?? process.env.AI_MODEL ?? "gpt-4o-mini",
       messages,
       tools: TOOLS,
       tool_choice: "auto",

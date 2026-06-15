@@ -52,6 +52,10 @@ export async function codeFallback(
     const ids = [...seenItemIds];
     const docs = await ClothingItem.find({ _id: { $in: ids } }, { _id: 1, category: 1 });
     candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));
+    if (candidates.length === 0) {
+      const docs = await ClothingItem.find({ memberId }, { _id: 1, category: 1 });
+      candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));
+    }
   } else {
     const docs = await ClothingItem.find({ memberId }, { _id: 1, category: 1 });
     candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));

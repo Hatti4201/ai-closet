@@ -15,5 +15,5 @@
     "declaration": false
   },
   "include": ["src/**/*", "seed/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/seed-images.ts", "src/seed-wardrobe.ts"]
 }

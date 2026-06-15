@@ -11,6 +11,20 @@ import {
 export * from "./types";
 
 const DEFAULT_LIMIT = 50;
+const DEFAULT_MEMBER_ID = "member_self";
+
+export async function ensureDefaultMember() {
+  const existing = await Member.findOne({});
+  if (existing) return existing.toJSON();
+
+  const created = await Member.create({
+    _id: DEFAULT_MEMBER_ID,
+    householdId: "hh_001",
+    displayName: "Me",
+    role: "self",
+  });
+  return created.toJSON();
+}
 
 /** search_wardrobe — main candidate filter. All params optional; pre-filters in DB. */
 export async function searchWardrobe(params: SearchWardrobeParams = {}) {
@@ -51,7 +65,9 @@ export async function getFamilyMembers(params: { householdId: string }) {
 /** Helper for GET /api/members (no param in the HTTP contract): list all / by household. */
 export async function listMembers(householdId?: string) {
   const docs = await Member.find(householdId ? { householdId } : {});
-  return docs.map((d) => d.toJSON());
+  if (docs.length > 0) return docs.map((d) => d.toJSON());
+  const member = await ensureDefaultMember();
+  return householdId && member.householdId !== householdId ? [] : [member];
 }
 
 /** get_preference_profile — MVP: derive from the member's own item history. */
