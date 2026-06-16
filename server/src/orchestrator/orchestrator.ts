@@ -11,7 +11,10 @@ const TOOLS = [
     type: "function" as const,
     function: {
       name: "search_wardrobe",
-      description: "Search clothing items by member, category, color, occasion, temperature, etc.",
+      description: "Search clothing items by member, category, color, occasion, or warmth index. " +
+        "tempMin/tempMax filter by temperatureIndex: a 0–10 WARMTH SCALE (NOT degrees Celsius). " +
+        "0–3 = lightweight summer items, 4–5 = spring/fall medium weight, 6–8 = cool/cold weather, 9–10 = heavy winter. " +
+        "For hot weather (>22°C) use tempMax=4. For mild weather (12–22°C) use tempMin=3,tempMax=6. For cold (<12°C) use tempMin=6.",
       parameters: {
         type: "object",
         properties: {
@@ -19,8 +22,8 @@ const TOOLS = [
           category: { type: "string", enum: ["Top","Bottom","Shoes","Outerwear","Dress","Accessory"] },
           colorFamily: { type: "string" },
           pattern: { type: "string" },
-          tempMin: { type: "number" },
-          tempMax: { type: "number" },
+          tempMin: { type: "number", description: "minimum warmth index (0-10 scale, NOT Celsius)" },
+          tempMax: { type: "number", description: "maximum warmth index (0-10 scale, NOT Celsius)" },
           coverageMin: { type: "number" },
           coverageMax: { type: "number" },
           occasion: { type: "string" },
@@ -145,9 +148,10 @@ function llmBaseUrl(): string | null {
   return process.env.LLM_BASE_URL ?? process.env.AI_BASE_URL ?? null;
 }
 
-async function callLLM(messages: Message[]): Promise<any> {
+async function callLLM(messages: Message[], toolChoice: "auto" | "required" | "none" = "auto"): Promise<any> {
   const base = llmBaseUrl()!;
   const url = base.replace(/\/$/, "") + "/chat/completions";
+  const noTools = toolChoice === "none";
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -157,8 +161,8 @@ async function callLLM(messages: Message[]): Promise<any> {
     body: JSON.stringify({
       model: process.env.LLM_MODEL ?? process.env.AI_MODEL ?? "gpt-4o-mini",
       messages,
-      tools: TOOLS,
-      tool_choice: "auto",
+      tools: noTools ? undefined : TOOLS,
+      tool_choice: noTools ? undefined : toolChoice,
     }),
   });
   if (!res.ok) {
@@ -194,10 +198,27 @@ export async function runOrchestrator(
 
   let rawText = "";
   let attempts = 0;
+  let toolRounds = 0;
 
   // Main loop
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const response = await callLLM(messages);
+    const forceText = toolRounds >= 4;
+    // Round 0: force search_wardrobe to guarantee seenItemIds is populated
+    // After 4 tool rounds: force text response (no tools)
+    const toolChoice = forceText
+      ? "none"
+      : round === 0
+      ? ({ type: "function", function: { name: "search_wardrobe" } } as any)
+      : "auto";
+    if (forceText) {
+      messages.push({ role: "user", content: "Now respond with the final JSON outfit recommendations." });
+    }
+    let response: any;
+    try {
+      response = await callLLM(messages, toolChoice);
+    } catch {
+      break;
+    }
     const choice = response.choices?.[0];
     const msg = choice?.message;
 
@@ -205,6 +226,7 @@ export async function runOrchestrator(
 
     // Tool calls
     if (msg.tool_calls?.length) {
+      toolRounds++;
       messages.push({ role: "assistant", content: msg.content ?? null, tool_calls: msg.tool_calls });
       for (const tc of msg.tool_calls) {
         const args = JSON.parse(tc.function.arguments ?? "{}");
