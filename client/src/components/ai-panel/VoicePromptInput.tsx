@@ -7,24 +7,88 @@ interface Props {
 
 type Phase = 'idle' | 'listening' | 'typing';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SpeechRecognitionCtor: (new () => any) | undefined =
+  (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
+
 export default function VoicePromptInput({ value, onChange }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [draft, setDraft] = useState(value);
+  const [liveText, setLiveText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
-  // Sync draft if parent resets value
   useEffect(() => {
     if (!value) { setDraft(''); setPhase('idle'); }
   }, [value]);
 
-  const handleMicClick = () => {
-    setDraft(value);
-    setPhase('listening');
-    // Simulate transcription delay, then show inline input
-    setTimeout(() => {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { recognitionRef.current?.abort(); };
+  }, []);
+
+  const startListening = () => {
+    if (!SpeechRecognitionCtor) {
+      // Fallback: skip straight to manual typing
+      setDraft(value);
       setPhase('typing');
       setTimeout(() => textareaRef.current?.focus(), 50);
-    }, 1200);
+      return;
+    }
+
+    const rec = new SpeechRecognitionCtor();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'zh-CN';
+
+    rec.onresult = (event: any) => {
+      let interim = '';
+      let final = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const text = event.results[i][0].transcript;
+        if (event.results[i].isFinal) final += text;
+        else interim += text;
+      }
+      setLiveText(final + interim);
+    };
+
+    rec.onend = () => {
+      // Recognition stopped (natural pause or user clicked stop)
+      const currentText = liveTextRef.current.trim();
+      setDraft(currentText || value);
+      setLiveText('');
+      setPhase('typing');
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    };
+
+    rec.onerror = () => {
+      setLiveText('');
+      setDraft(value);
+      setPhase('typing');
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    };
+
+    recognitionRef.current = rec;
+    setLiveText('');
+    setPhase('listening');
+    rec.start();
+  };
+
+  const stopListening = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+  };
+
+  // Keep a ref to liveText so onend closure can read the latest value
+  const liveTextRef = useRef('');
+  useEffect(() => { liveTextRef.current = liveText; }, [liveText]);
+
+  const handleMicClick = () => {
+    if (phase === 'listening') {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const handleConfirm = () => {
@@ -39,14 +103,8 @@ export default function VoicePromptInput({ value, onChange }: Props) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleConfirm();
-    }
-    if (e.key === 'Escape') {
-      setDraft(value);
-      setPhase('idle');
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleConfirm(); }
+    if (e.key === 'Escape') { setDraft(value); setPhase('idle'); }
   };
 
   return (
@@ -80,24 +138,33 @@ export default function VoicePromptInput({ value, onChange }: Props) {
         </div>
       )}
 
-      {/* ── LISTENING: pulsing animation ── */}
+      {/* ── LISTENING: real-time transcript + stop button ── */}
       {phase === 'listening' && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="relative flex items-center justify-center">
-            {/* Outer pulse rings */}
-            <span className="absolute w-16 h-16 rounded-full bg-gray-900/10 animate-ping" />
-            <span className="absolute w-12 h-12 rounded-full bg-gray-900/15 animate-ping"
+          <button
+            onClick={handleMicClick}
+            className="relative flex items-center justify-center"
+            title="Tap to stop"
+          >
+            <span className="absolute w-16 h-16 rounded-full bg-red-400/20 animate-ping" />
+            <span className="absolute w-12 h-12 rounded-full bg-red-400/25 animate-ping"
                   style={{ animationDelay: '0.2s' }} />
-            {/* Mic icon */}
-            <div className="relative w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white text-lg z-10">
+            <div className="relative w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white text-lg z-10">
               🎤
             </div>
-          </div>
-          <p className="text-xs text-gray-400 animate-pulse">Listening…</p>
+          </button>
+          {liveText ? (
+            <p className="text-xs text-gray-600 text-center leading-relaxed px-2 line-clamp-4">
+              {liveText}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 animate-pulse">Listening…</p>
+          )}
+          <p className="text-xs text-gray-300">Tap to stop</p>
         </div>
       )}
 
-      {/* ── TYPING: inline textarea ── */}
+      {/* ── TYPING: editable textarea ── */}
       {phase === 'typing' && (
         <div className="flex-1 flex flex-col gap-2">
           <textarea
