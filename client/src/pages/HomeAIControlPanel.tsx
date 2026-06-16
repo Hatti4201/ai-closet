@@ -92,7 +92,7 @@ export default function HomeAIControlPanel() {
       setPrompt(builtPrompt);
       const [data, items] = await Promise.all([
         recommendationApi.generate(member.id, builtPrompt, coords ?? undefined),
-        clothingApi.getAll({ memberId: member.id } as any),
+        clothingApi.getAll(),
       ]);
       const map = new Map<string, ClothingItem>();
       for (const item of (items as ClothingItem[])) map.set(item.id ?? item._id, item);

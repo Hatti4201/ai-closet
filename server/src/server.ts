@@ -14,6 +14,22 @@ async function main(): Promise<void> {
     console.log(`[server] in-memory DB auto-seeded: ${members} members, ${items} items`);
   }
 
+  // One-time migration: fix items that were saved with memberId "undefined" (string)
+  // due to a toJSON bug where _id was read from an exposeStringId-transformed document.
+  if (!inMemory) {
+    const { Member, ClothingItem } = await import("./models");
+    const firstMember = await Member.findOne({});
+    if (firstMember) {
+      const result = await ClothingItem.updateMany(
+        { memberId: "undefined" },
+        { $set: { memberId: firstMember._id } },
+      );
+      if (result.modifiedCount > 0) {
+        console.log(`[server] migrated ${result.modifiedCount} items from memberId "undefined" → "${firstMember._id}"`);
+      }
+    }
+  }
+
   const app = createApp();
   const port = Number(process.env.PORT) || 4000;
   app.listen(port, () => {
