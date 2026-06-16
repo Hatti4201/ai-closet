@@ -105,7 +105,11 @@ async function dispatchTool(name: string, args: any, seenItemIds: Set<string>): 
   try {
     switch (name) {
       case "search_wardrobe": {
-        const items = await searchWardrobe(args);
+        let items = await searchWardrobe(args);
+        // Fallback: if member-scoped search is empty, search all items (handles legacy memberId data)
+        if (items.length === 0 && args.memberId) {
+          items = await searchWardrobe({ ...args, memberId: undefined });
+        }
         for (const it of items) {
           const id = itemIdOf(it);
           if (id) seenItemIds.add(String(id));

@@ -46,18 +46,17 @@ export async function codeFallback(
   memberId: string,
   seenItemIds: Set<string>,
 ): Promise<RawLook[]> {
-  let candidates: { id: string; category: string }[];
+  let candidates: { id: string; category: string }[] = [];
 
   if (seenItemIds.size > 0) {
     const ids = [...seenItemIds];
     const docs = await ClothingItem.find({ _id: { $in: ids } }, { _id: 1, category: 1 });
     candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));
-    if (candidates.length === 0) {
-      const docs = await ClothingItem.find({ memberId }, { _id: 1, category: 1 });
-      candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));
-    }
-  } else {
-    const docs = await ClothingItem.find({ memberId }, { _id: 1, category: 1 });
+  }
+  if (candidates.length === 0) {
+    // Try member-scoped first, then fall back to all items (handles legacy "undefined" memberId)
+    let docs = await ClothingItem.find({ memberId }, { _id: 1, category: 1 });
+    if (docs.length === 0) docs = await ClothingItem.find({}, { _id: 1, category: 1 });
     candidates = docs.map((d) => ({ id: d._id.toString(), category: d.category }));
   }
 

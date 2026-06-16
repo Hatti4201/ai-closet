@@ -96,7 +96,8 @@ const imagesFromForm = (body: Record<string, unknown>, files: Express.Multer.Fil
 async function resolveMemberId(input?: string): Promise<string> {
   if (input) return input;
   const member = await ensureDefaultMember();
-  return String(member._id);
+  // member is already toJSON() output — exposeStringId removes _id and exposes id virtual
+  return String((member as any).id ?? (member as any)._id);
 }
 
 function itemPayload(body: Record<string, unknown>, memberId: string, images: string[]) {
