@@ -11,6 +11,7 @@ import ClothingDetailPage from './pages/ClothingDetailPage';
 import RecommendationPage from './pages/RecommendationPage';
 import LookDetailPage from './pages/LookDetailPage';
 import CreateLookPage from './pages/CreateLookPage';
+import BatchImportPage from './pages/BatchImportPage';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="/recommendations" element={<RecommendationPage />} />
             <Route path="/looks/create" element={<CreateLookPage />} />
             <Route path="/looks/:id" element={<LookDetailPage />} />
+            <Route path="/import" element={<BatchImportPage />} />
           </Route>
         </Route>
 

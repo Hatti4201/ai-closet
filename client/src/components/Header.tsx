@@ -33,6 +33,7 @@ export default function Header() {
         {navLink('/home', 'Style')}
         {navLink('/wardrobe', 'Wardrobe')}
         {navLink('/upload', 'Upload')}
+        {navLink('/import', 'Batch Import')}
         {navLink('/recommendations', 'My Looks')}
         {user && <span className="text-sm text-gray-300">|</span>}
         {user && <span className="text-sm text-gray-400">{user.name}</span>}
