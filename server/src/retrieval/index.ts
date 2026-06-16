@@ -61,7 +61,13 @@ export async function searchWardrobe(params: SearchWardrobeParams = {}) {
   }
 
   const limit = params.limit && params.limit > 0 ? params.limit : DEFAULT_LIMIT;
-  const docs = await ClothingItem.find(filter).limit(limit);
+  let docs = await ClothingItem.find(filter).limit(limit);
+  // Fallback: if member-scoped search returns nothing, search all items.
+  // Handles items that were saved with memberId "undefined" due to a toJSON bug.
+  if (docs.length === 0 && filter.memberId) {
+    const { memberId: _, ...rest } = filter;
+    docs = await ClothingItem.find(rest).limit(limit);
+  }
   return docs.map((d) => d.toJSON());
 }
 
