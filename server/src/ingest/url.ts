@@ -32,6 +32,10 @@ const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const IMAGE_EXT_RE = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)(\?.*)?$/i;
+// Matches image extension ANYWHERE in URL (e.g. H&M CDN: ?set=source[/hash.jpg],type[...])
+const IMAGE_IN_URL_RE = /\.(avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)/i;
+// Known image CDN domains that may not end with an image extension
+const KNOWN_IMAGE_CDN_RE = /lp2\.hm\.com|scene7\.com|res\.cloudinary\.com|cdn\.shopify\.com|images\.ctfassets\.net/i;
 const COLOR_ALIASES: Record<string, ColorFamily> = {
   anthracite: "Gray",
   aqua: "Blue",
@@ -340,7 +344,7 @@ function parseJsonLd(html: string): PageMeta {
 /** Recursively collect image URLs from any JSON blob (e.g. __NEXT_DATA__). */
 function collectUrlsFromJson(obj: unknown, out: string[]): void {
   if (typeof obj === "string") {
-    if (IMAGE_EXT_RE.test(obj) && /^https?:\/\//.test(obj)) out.push(obj);
+    if (/^https?:\/\//.test(obj) && (IMAGE_IN_URL_RE.test(obj) || KNOWN_IMAGE_CDN_RE.test(obj))) out.push(obj);
   } else if (Array.isArray(obj)) {
     obj.forEach(v => collectUrlsFromJson(v, out));
   } else if (obj && typeof obj === "object") {
@@ -415,6 +419,14 @@ async function fetchPage(url: string): Promise<PageMeta> {
   if (html.includes("_cf_chl_opt") || (html.includes("Just a moment") && html.includes("challenges.cloudflare.com"))) {
     throw new Error(
       "This store uses Cloudflare bot protection and cannot be fetched automatically. " +
+      "Try right-clicking a product image in your browser → 'Copy image address', then paste that image URL directly instead.",
+    );
+  }
+
+  // Detect Akamai / generic "Access Denied" with no product content
+  if (html.includes("edgesuite.net") || (html.includes("Access Denied") && html.length < 2000)) {
+    throw new Error(
+      "This store uses bot protection (Akamai) and cannot be fetched automatically. " +
       "Try right-clicking a product image in your browser → 'Copy image address', then paste that image URL directly instead.",
     );
   }
