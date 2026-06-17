@@ -75,7 +75,8 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
   const toggleImage = (url: string) => {
     setSelectedImages(prev => {
       if (prev.includes(url)) return prev.filter(u => u !== url);
-      if (prev.length >= 3) return prev;
+      // slots full: replace the last selected with the new one
+      if (prev.length >= 3) return [...prev.slice(0, 2), url];
       return [...prev, url];
     });
   };

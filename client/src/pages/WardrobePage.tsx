@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { clothingApi } from '../api/clothingApi';
 import { ClothingItem, ClothingFilters } from '../types/clothing';
 import ClothingCard from '../components/ClothingCard';
@@ -7,6 +7,7 @@ import WardrobeFilterSidebar from '../components/WardrobeFilterSidebar';
 
 export default function WardrobePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [filters, setFilters] = useState<ClothingFilters>({});
   const [search, setSearch] = useState('');
@@ -22,7 +23,7 @@ export default function WardrobePage() {
     }
   };
 
-  useEffect(() => { fetchItems(); }, [JSON.stringify(filters)]);
+  useEffect(() => { fetchItems(); }, [JSON.stringify(filters), location.key]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
