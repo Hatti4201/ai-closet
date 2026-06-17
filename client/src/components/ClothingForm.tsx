@@ -16,6 +16,7 @@ interface Props {
 export default function ClothingForm({ initial, onSubmit, loading, remoteImages = [], importSlot }: Props) {
   const [name, setName] = useState(initial?.name ?? '');
   const [brand, setBrand] = useState(initial?.brand ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
   const [category, setCategory] = useState<Category>(initial?.category ?? 'Top');
   const [subcategory, setSubcategory] = useState(initial?.subcategory ?? '');
   const [colors, setColors] = useState<Color[]>(initial?.colors ?? [{ family: 'Black' }]);
@@ -30,6 +31,7 @@ export default function ClothingForm({ initial, onSubmit, loading, remoteImages 
   useEffect(() => {
     setName(initial?.name ?? '');
     setBrand(initial?.brand ?? '');
+    setDescription(initial?.description ?? '');
     setCategory(initial?.category ?? 'Top');
     setSubcategory(initial?.subcategory ?? '');
     setColors(initial?.colors ?? [{ family: 'Black' }]);
@@ -55,6 +57,7 @@ export default function ClothingForm({ initial, onSubmit, loading, remoteImages 
     const fd = new FormData();
     fd.append('name', name);
     if (brand) fd.append('brand', brand);
+    if (description) fd.append('description', description);
     fd.append('category', category);
     if (subcategory) fd.append('subcategory', subcategory);
     fd.append('colors', JSON.stringify(colors));
@@ -128,6 +131,17 @@ export default function ClothingForm({ initial, onSubmit, loading, remoteImages 
           onChange={(e) => setBrand(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           placeholder="e.g. Uniqlo"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+          placeholder="Material composition, fit, care instructions…"
         />
       </div>
 

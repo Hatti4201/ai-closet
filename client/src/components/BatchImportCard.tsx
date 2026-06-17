@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import { clothingApi } from '../api/clothingApi';
 import { QueueItem } from '../pages/BatchImportPage';
 import { CATEGORIES, PATTERNS, MATERIALS } from '../utils/constants';
-import { Category, Pattern, Color } from '../types/clothing';
+import { Category, Pattern, Color, ClothingImage } from '../types/clothing';
 import ColorFamilySelect from './ColorFamilySelect';
 import { getFirstImage } from '../utils/imageUrl';
+
+const toUrl = (img: string | ClothingImage): string =>
+  typeof img === 'string' ? img : img.url;
 
 interface Props {
   item: QueueItem;
@@ -16,6 +19,7 @@ interface Props {
 export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Props) {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
+  const [description, setDescription] = useState('');
   const [category, setCategory] = useState<Category>('Top');
   const [subcategory, setSubcategory] = useState('');
   const [colors, setColors] = useState<Color[]>([{ family: 'Black' }]);
@@ -23,6 +27,7 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
   const [material, setMaterial] = useState('Cotton');
   const [temperatureIndex, setTemperatureIndex] = useState(5);
   const [coverageLevel, setCoverageLevel] = useState(5);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -31,6 +36,7 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     const d = item.draft;
     setName(d.name ?? '');
     setBrand(d.brand ?? '');
+    setDescription(d.description ?? '');
     setCategory(d.category ?? 'Top');
     setSubcategory(d.subcategory ?? '');
     setColors(d.colors?.length ? d.colors : [{ family: 'Black' }]);
@@ -38,8 +44,17 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     setMaterial(d.material ?? 'Cotton');
     setTemperatureIndex(d.temperatureIndex ?? 5);
     setCoverageLevel(d.coverageLevel ?? 5);
+    setSelectedImages((d.images ?? []).map(toUrl).slice(0, 3));
     setExpanded(true);
   }, [item.draft]);
+
+  const toggleImage = (url: string) => {
+    setSelectedImages(prev => {
+      if (prev.includes(url)) return prev.filter(u => u !== url);
+      if (prev.length >= 3) return prev; // max 3
+      return [...prev, url];
+    });
+  };
 
   const handleSave = async () => {
     if (!item.draft) return;
@@ -47,8 +62,9 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     try {
       await clothingApi.createImported({
         ...item.draft,
-        name, brand, category, subcategory, colors, pattern, material,
+        name, brand, description, category, subcategory, colors, pattern, material,
         temperatureIndex, coverageLevel,
+        images: selectedImages.length ? selectedImages : (item.draft.images ?? []).slice(0, 3),
       });
       onSaved(item.id);
     } finally {
@@ -56,7 +72,8 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     }
   };
 
-  const imgUrl = item.draft?.images ? getFirstImage(item.draft.images) : null;
+  const allImages = (item.draft?.images ?? []).map(toUrl);
+  const imgUrl = selectedImages[0] ?? (allImages.length ? getFirstImage(allImages) : null);
 
   const statusBadge = {
     pending:    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Waiting</span>,
@@ -127,34 +144,77 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
       {/* Editable form — only when done/saved and expanded */}
       {(item.status === 'done' || item.status === 'saved') && expanded && (
         <div className="border-t border-gray-100 p-4 space-y-4">
-          <div className="flex gap-3">
-            {/* Larger image preview */}
-            {imgUrl && (
-              <img src={imgUrl} alt="" className="w-28 h-28 rounded-xl object-cover shrink-0 border border-gray-100" />
-            )}
-            <div className="flex-1 space-y-3">
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Name"
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  value={brand}
-                  onChange={e => setBrand(e.target.value)}
-                  placeholder="Brand"
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-                <input
-                  value={subcategory}
-                  onChange={e => setSubcategory(e.target.value)}
-                  placeholder="Subcategory"
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
+          {/* Image selection grid */}
+          {allImages.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 mb-2">
+                选择图片（最多3张，点击选中/取消）
+                <span className="ml-2 text-blue-500">{selectedImages.length}/3 已选</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {allImages.map((url, i) => {
+                  const isSelected = selectedImages.includes(url);
+                  const order = selectedImages.indexOf(url);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleImage(url)}
+                      className={`relative w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                        isSelected ? 'border-blue-500' : 'border-gray-200 opacity-60 hover:opacity-80'
+                      }`}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      {isSelected && (
+                        <span className="absolute top-1 left-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                          {order + 1}
+                        </span>
+                      )}
+                      {!isSelected && selectedImages.length >= 3 && (
+                        <div className="absolute inset-0 bg-black/30" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+          )}
+
+          <div className="space-y-3">
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Name"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={brand}
+                onChange={e => setBrand(e.target.value)}
+                placeholder="Brand"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <input
+                value={subcategory}
+                onChange={e => setSubcategory(e.target.value)}
+                placeholder="Subcategory"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
           </div>
+
+          {/* Description */}
+          {description && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Description</p>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={3}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-2">
             <select

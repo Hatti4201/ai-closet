@@ -138,6 +138,13 @@ export default function ClothingDetailPage() {
               <dd className="font-medium text-gray-900">{item.coverageLevel} / 10</dd>
             </div>
           </dl>
+
+          {item.description && (
+            <div className="mt-4 pt-4 border-t border-gray-100 text-sm">
+              <p className="text-gray-500 mb-1">Description</p>
+              <p className="text-gray-700 leading-relaxed">{item.description}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

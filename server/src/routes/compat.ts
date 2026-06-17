@@ -105,6 +105,7 @@ function itemPayload(body: Record<string, unknown>, memberId: string, images: st
     memberId,
     name: one(body.name) ?? "Untitled item",
     brand: one(body.brand),
+    description: one(body.description),
     category: enumField(body.category, CATEGORIES, "Top") as Category,
     subcategory: one(body.subcategory),
     colors: parseColors(body.colors),

@@ -22,6 +22,7 @@ export interface ClothingItem {
   colors: Color[];
   pattern: Pattern;
   material?: string;
+  description?: string;
   temperatureIndex: number;
   coverageLevel: number;
   images: (string | ClothingImage)[];  // new backend: string[]; old: ClothingImage[]

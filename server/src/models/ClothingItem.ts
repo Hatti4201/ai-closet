@@ -16,6 +16,7 @@ export interface ClothingItemDoc {
   colors: Color[];
   pattern: Pattern;
   material?: string;
+  description?: string; // full product description from page
   temperatureIndex: number; // 0-10
   coverageLevel: number; // 0-10
   occasionTags: OccasionTag[];
@@ -52,6 +53,7 @@ const ClothingItemSchema = new Schema<ClothingItemDoc>(
     },
     pattern: { type: String, enum: [...PATTERNS], required: true },
     material: { type: String },
+    description: { type: String },
     temperatureIndex: { type: Number, required: true, min: 0, max: 10 },
     coverageLevel: { type: Number, required: true, min: 0, max: 10 },
     occasionTags: { type: [{ type: String, enum: [...OCCASION_TAGS] }], default: [] },

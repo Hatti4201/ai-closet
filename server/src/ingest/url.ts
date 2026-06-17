@@ -13,6 +13,7 @@ export interface UrlIngestDraft {
   colors: { family: ColorFamily; name?: string }[];
   pattern: Pattern;
   material?: string;
+  description?: string;
   temperatureIndex: number;
   coverageLevel: number;
   occasionTags: OccasionTag[];
@@ -22,7 +23,7 @@ export interface UrlIngestDraft {
 interface PageMeta {
   title?: string;
   brand?: string;
-  imageUrl?: string;
+  images: string[];      // all candidate images, ordered by relevance
   description?: string;
 }
 
@@ -268,6 +269,33 @@ function isLikelyImageUrl(url: string): boolean {
   return IMAGE_EXT_RE.test(new URL(url).pathname);
 }
 
+/** Return true for icons, thumbnails, and other non-product images. */
+function isNoiseImage(url: string): boolean {
+  return /thumb(?:nail)?|_\d{2,3}x\d{0,3}|\/\d{2,3}x\d{2,3}\/|icon|logo|badge|avatar|sprite|placeholder|swatch|dot\.|pixel|rating|star|arrow/i.test(url);
+}
+
+/** Deduplicate by pathname (ignores query params / CDN sizing tokens). */
+function dedupeImages(urls: string[]): string[] {
+  const seen = new Set<string>();
+  return urls.filter(url => {
+    const key = (() => { try { return new URL(url).pathname; } catch { return url; } })();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Score a URL to surface flat-lay / model shots: higher = more desirable. */
+function imageScore(url: string): number {
+  const u = url.toLowerCase();
+  if (/front|_f\d|[_-]1[._]|main|primary|hero/.test(u)) return 30;
+  if (/back|rear|_b\d/.test(u)) return 20;
+  if (/model|worn|lifestyle|on.?body|look|worn/.test(u)) return 15;
+  if (/detail|close.?up|zoom/.test(u)) return 5;
+  return 10;
+}
+
+/** Extract all product image URLs from JSON-LD scripts. */
 function parseJsonLd(html: string): PageMeta {
   const scripts = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
   for (const script of scripts) {
@@ -279,19 +307,53 @@ function parseJsonLd(html: string): PageMeta {
         return type === "Product" || (Array.isArray(type) && type.includes("Product"));
       });
       if (!product) continue;
-      const image = Array.isArray(product.image) ? product.image[0] : product.image;
+
+      // Collect all images from the JSON-LD array
+      const rawImages: string[] = [];
+      const imgField = product.image;
+      if (typeof imgField === "string") rawImages.push(imgField);
+      else if (Array.isArray(imgField)) {
+        for (const img of imgField) {
+          if (typeof img === "string") rawImages.push(img);
+          else if (img?.url) rawImages.push(img.url);
+          else if (img?.contentUrl) rawImages.push(img.contentUrl);
+        }
+      } else if (imgField?.url) rawImages.push(imgField.url);
+      else if (imgField?.contentUrl) rawImages.push(imgField.contentUrl);
+
       const brand = typeof product.brand === "string" ? product.brand : product.brand?.name;
       return {
         title: product.name,
         brand,
-        imageUrl: typeof image === "string" ? image : undefined,
+        images: rawImages.filter(Boolean),
         description: product.description,
       };
     } catch {
       // Ignore malformed JSON-LD blocks and fall back to meta tags.
     }
   }
-  return {};
+  return { images: [] };
+}
+
+/** Scan HTML for product gallery images (lazy-loaded or inline). */
+function extractGalleryImages(html: string, baseUrl: string): string[] {
+  const results: string[] = [];
+  // data-zoom-src / data-src are common for product galleries
+  const patterns = [
+    /data-zoom-src=["']([^"']+)["']/gi,
+    /data-src=["']([^"']+)["']/gi,
+    /data-srcset=["']([^"']+)["']/gi,
+    /<img[^>]+src=["']([^"']+)["']/gi,
+  ];
+  for (const re of patterns) {
+    for (const m of html.matchAll(re)) {
+      // srcset: take the last (largest) url
+      const raw = m[1].trim().split(",").pop()?.trim().split(/\s+/)[0] ?? m[1].trim();
+      if (!IMAGE_EXT_RE.test(raw) || isNoiseImage(raw)) continue;
+      try { results.push(absoluteUrl(raw, baseUrl)); } catch {}
+    }
+  }
+  return results;
 }
 
 async function fetchPage(url: string): Promise<PageMeta> {
@@ -318,6 +380,7 @@ async function fetchPage(url: string): Promise<PageMeta> {
   }
   const html = await res.text();
   const jsonLd = parseJsonLd(html);
+
   const title = jsonLd.title ?? firstMatch(html, [
     /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
@@ -325,12 +388,7 @@ async function fetchPage(url: string): Promise<PageMeta> {
     /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:title["']/i,
     /<title[^>]*>([\s\S]*?)<\/title>/i,
   ]);
-  const image = jsonLd.imageUrl ?? firstMatch(html, [
-    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
-    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
-  ]);
+
   const description = jsonLd.description ?? firstMatch(html, [
     /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i,
@@ -338,10 +396,35 @@ async function fetchPage(url: string): Promise<PageMeta> {
     /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["']/i,
   ]);
 
+  // Collect images: JSON-LD array first (best quality + ordering), then og/twitter fallback, then gallery scan
+  const ogImage = firstMatch(html, [
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
+    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i,
+  ]);
+
+  const galleryImages = extractGalleryImages(html, url);
+
+  const allCandidates = [
+    ...jsonLd.images.map(img => { try { return absoluteUrl(img, url); } catch { return ""; } }).filter(Boolean),
+    ...(ogImage ? [absoluteUrl(ogImage, url)] : []),
+    ...galleryImages,
+  ].filter(u => !isNoiseImage(u));
+
+  // Dedupe, then sort: JSON-LD images first (keep order), then score-rank the rest
+  const jsonLdSet = new Set(jsonLd.images.map(img => { try { return new URL(absoluteUrl(img, url)).pathname; } catch { return ""; } }));
+  const deduped = dedupeImages(allCandidates);
+  const sorted = [
+    ...deduped.filter(u => { try { return jsonLdSet.has(new URL(u).pathname); } catch { return false; } }),
+    ...deduped.filter(u => { try { return !jsonLdSet.has(new URL(u).pathname); } catch { return true; } })
+      .sort((a, b) => imageScore(b) - imageScore(a)),
+  ];
+
   return {
     title: title?.replace(/\s+/g, " ").trim(),
     brand: jsonLd.brand ?? brandFromUrl(url),
-    imageUrl: image ? absoluteUrl(image, url) : undefined,
+    images: sorted.slice(0, 8), // keep up to 8 candidates for AI / heuristic selection
     description: description?.replace(/\s+/g, " ").trim(),
   };
 }
@@ -355,7 +438,15 @@ async function uploadImage(imageUrl: string): Promise<string> {
   return result.secure_url;
 }
 
-function heuristicDraft(sourceUrl: string, meta: PageMeta, imageUrl?: string): UrlIngestDraft {
+/** Upload up to `max` images concurrently, silently skip failures. */
+async function uploadImages(imageUrls: string[], max = 3): Promise<string[]> {
+  const results = await Promise.allSettled(
+    imageUrls.slice(0, max).map(url => uploadImage(url))
+  );
+  return results.flatMap(r => r.status === "fulfilled" ? [r.value] : []);
+}
+
+function heuristicDraft(sourceUrl: string, meta: PageMeta, images: string[]): UrlIngestDraft {
   const text = `${meta.title ?? ""} ${meta.description ?? ""}`.toLowerCase();
   const category: Category =
     /dress/.test(text) ? "Dress" :
@@ -396,18 +487,19 @@ function heuristicDraft(sourceUrl: string, meta: PageMeta, imageUrl?: string): U
     colors: colorsFromText(text).length ? colorsFromText(text) : [{ family: "Multi" }],
     pattern,
     material,
+    description: meta.description,
     temperatureIndex: warm.temperatureIndex,
     coverageLevel: warm.coverageLevel,
     occasionTags: ["casual"],
-    images: imageUrl ? [imageUrl] : [],
+    images,
   };
 }
 
-function parseModelDraft(sourceUrl: string, meta: PageMeta, imageUrl: string | undefined, content: string): UrlIngestDraft {
+function parseModelDraft(sourceUrl: string, meta: PageMeta, images: string[], content: string): UrlIngestDraft {
   const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) ?? content.match(/(\{[\s\S]*\})/);
   const raw = jsonMatch ? jsonMatch[1] : content;
   const parsed = JSON.parse(raw);
-  const fallback = heuristicDraft(sourceUrl, meta, imageUrl);
+  const fallback = heuristicDraft(sourceUrl, meta, images);
   const colors = Array.isArray(parsed.colors)
     ? dedupeColors(parsed.colors.map((c: any) => ({
       family: normalizeColor(c?.family ?? c?.name ?? c)?.family ?? "Multi",
@@ -439,21 +531,28 @@ function parseModelDraft(sourceUrl: string, meta: PageMeta, imageUrl: string | u
     colors: colors.length ? colors : fallback.colors,
     pattern: enumValue(parsed.pattern, PATTERNS, fallback.pattern),
     material,
+    description: typeof parsed.description === "string" && parsed.description.trim()
+      ? parsed.description.trim()
+      : fallback.description,
     temperatureIndex: warm.temperatureIndex,
     coverageLevel: warm.coverageLevel,
     occasionTags: occasionTags.length ? occasionTags : fallback.occasionTags,
-    images: imageUrl ? [imageUrl] : [],
+    images,
   };
 }
 
-async function callVisionModel(sourceUrl: string, meta: PageMeta, imageUrl?: string): Promise<UrlIngestDraft | null> {
+async function callVisionModel(sourceUrl: string, meta: PageMeta, images: string[]): Promise<UrlIngestDraft | null> {
   const base = process.env.LLM_BASE_URL ?? process.env.AI_BASE_URL;
   const key = process.env.LLM_API_KEY ?? process.env.AI_API_KEY;
   if (!base || !key) return null;
 
+  const imageList = images.length
+    ? `\nCandidate images (ordered by relevance):\n${images.map((u, i) => `${i + 1}. ${u}`).join("\n")}`
+    : "";
+
   const prompt =
     "Analyze this clothing product and return ONLY JSON with fields: " +
-    "name, brand, category, subcategory, colors, pattern, material, temperatureIndex, coverageLevel, occasionTags. " +
+    "name, brand, category, subcategory, colors, pattern, material, description, temperatureIndex, coverageLevel, occasionTags. " +
     `Allowed category values: ${CATEGORIES.join(", ")}. ` +
     `Allowed color family values: ${COLOR_FAMILIES.join(", ")}. ` +
     "For colors, identify the visible dominant clothing colors from the product image. " +
@@ -466,12 +565,16 @@ async function callVisionModel(sourceUrl: string, meta: PageMeta, imageUrl?: str
     "3-5 medium items such as shirts, light trousers, sneakers; " +
     "6-8 warm items such as sweaters, hoodies, boots, wool; " +
     "9-10 heavy winter outerwear only. " +
-    "coverageLevel means body coverage: sandals/shorts low, full trousers/long sleeves medium-high, coats high.";
+    "coverageLevel means body coverage: sandals/shorts low, full trousers/long sleeves medium-high, coats high. " +
+    "description should be a concise product description including material composition, fit, and key details (max 300 chars).";
 
   const content: any[] = [
-    { type: "text", text: `${prompt}\nProduct URL: ${sourceUrl}\nTitle: ${meta.title ?? ""}\nBrand: ${meta.brand ?? ""}\nDescription: ${meta.description ?? ""}` },
+    { type: "text", text: `${prompt}\nProduct URL: ${sourceUrl}\nTitle: ${meta.title ?? ""}\nBrand: ${meta.brand ?? ""}\nPage description: ${meta.description ?? ""}${imageList}` },
   ];
-  if (imageUrl) content.push({ type: "image_url", image_url: { url: imageUrl } });
+  // Attach up to 3 images as vision inputs
+  for (const imgUrl of images.slice(0, 3)) {
+    content.push({ type: "image_url", image_url: { url: imgUrl } });
+  }
 
   const res = await fetch(base.replace(/\/$/, "") + "/chat/completions", {
     method: "POST",
@@ -486,7 +589,7 @@ async function callVisionModel(sourceUrl: string, meta: PageMeta, imageUrl?: str
   const data: any = await res.json();
   const text = data.choices?.[0]?.message?.content;
   if (typeof text !== "string") return null;
-  return parseModelDraft(sourceUrl, meta, imageUrl, text);
+  return parseModelDraft(sourceUrl, meta, images, text);
 }
 
 export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraft> {
@@ -499,18 +602,20 @@ export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraf
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only http(s) URLs are supported");
 
   if (isLikelyImageUrl(url.toString())) {
-    const imageUrl = await uploadImage(url.toString());
+    const uploadedUrl = await uploadImage(url.toString());
+    const images = [uploadedUrl];
     const meta: PageMeta = {
       title: "Imported clothing item",
       brand: brandFromUrl(url.toString()),
-      imageUrl,
+      images,
     };
-    const modelDraft = await callVisionModel(url.toString(), meta, imageUrl).catch(() => null);
-    return modelDraft ?? heuristicDraft(url.toString(), meta, imageUrl);
+    const modelDraft = await callVisionModel(url.toString(), meta, images).catch(() => null);
+    return modelDraft ?? heuristicDraft(url.toString(), meta, images);
   }
 
   const meta = await fetchPage(url.toString());
-  const imageUrl = meta.imageUrl ? await uploadImage(meta.imageUrl) : undefined;
-  const modelDraft = await callVisionModel(url.toString(), meta, imageUrl).catch(() => null);
-  return modelDraft ?? heuristicDraft(url.toString(), meta, imageUrl);
+  const uploadedImages = await uploadImages(meta.images, 5);
+  const images = uploadedImages.length ? uploadedImages : meta.images.slice(0, 5);
+  const modelDraft = await callVisionModel(url.toString(), meta, images).catch(() => null);
+  return modelDraft ?? heuristicDraft(url.toString(), meta, images);
 }

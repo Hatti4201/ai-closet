@@ -3,7 +3,7 @@ import { ClothingItem, ClothingFilters } from '../types/clothing';
 
 export type ImportedClothingDraft = Pick<
   ClothingItem,
-  'name' | 'brand' | 'category' | 'subcategory' | 'colors' | 'pattern' | 'material' |
+  'name' | 'brand' | 'category' | 'subcategory' | 'colors' | 'pattern' | 'material' | 'description' |
   'temperatureIndex' | 'coverageLevel' | 'images'
 > & {
   sourceUrl: string;
