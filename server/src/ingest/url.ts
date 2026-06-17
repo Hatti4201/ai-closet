@@ -410,6 +410,15 @@ async function fetchPage(url: string): Promise<PageMeta> {
     throw new Error(`Could not fetch product page (${res.status})`);
   }
   const html = await res.text();
+
+  // Detect Cloudflare managed challenge ("Just a moment...")
+  if (html.includes("_cf_chl_opt") || (html.includes("Just a moment") && html.includes("challenges.cloudflare.com"))) {
+    throw new Error(
+      "This store uses Cloudflare bot protection and cannot be fetched automatically. " +
+      "Try right-clicking a product image in your browser → 'Copy image address', then paste that image URL directly instead.",
+    );
+  }
+
   const jsonLd = parseJsonLd(html);
 
   const title = jsonLd.title ?? firstMatch(html, [
