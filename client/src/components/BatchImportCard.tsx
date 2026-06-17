@@ -28,6 +28,8 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
   const [temperatureIndex, setTemperatureIndex] = useState(5);
   const [coverageLevel, setCoverageLevel] = useState(5);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [extraImages, setExtraImages] = useState<string[]>([]);
+  const [imageInput, setImageInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -48,13 +50,11 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     setExpanded(true);
   }, [item.draft]);
 
-  const toggleImage = (url: string) => {
-    setSelectedImages(prev => {
-      if (prev.includes(url)) return prev.filter(u => u !== url);
-      if (prev.length >= 3) return prev; // max 3
-      return [...prev, url];
-    });
-  };
+  // candidateImages = all raw URLs from server + manually added extras
+  const allImages = [
+    ...(item.draft?.candidateImages ?? item.draft?.images ?? []).map(toUrl),
+    ...extraImages,
+  ];
 
   const handleSave = async () => {
     if (!item.draft) return;
@@ -72,8 +72,24 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     }
   };
 
-  // candidateImages = all raw URLs from server; fall back to uploaded images
-  const allImages = (item.draft?.candidateImages ?? item.draft?.images ?? []).map(toUrl);
+  const toggleImage = (url: string) => {
+    setSelectedImages(prev => {
+      if (prev.includes(url)) return prev.filter(u => u !== url);
+      if (prev.length >= 3) return prev;
+      return [...prev, url];
+    });
+  };
+
+  const addImageUrl = () => {
+    const url = imageInput.trim();
+    if (!url || !url.startsWith('http')) return;
+    if (!allImages.includes(url)) {
+      setExtraImages(prev => [...prev, url]);
+      setSelectedImages(prev => prev.length < 3 ? [...prev, url] : prev);
+    }
+    setImageInput('');
+  };
+
   const imgUrl = selectedImages[0] ?? (allImages.length ? getFirstImage(allImages) : null);
 
   const statusBadge = {
@@ -177,6 +193,24 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
                     </button>
                   );
                 })}
+              </div>
+              {/* Manual image URL input */}
+              <div className="flex gap-2 mt-2">
+                <input
+                  value={imageInput}
+                  onChange={e => setImageInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addImageUrl()}
+                  placeholder="粘贴图片链接（右键图片→拷贝图像地址）"
+                  className="flex-1 border border-dashed border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-500"
+                />
+                <button
+                  type="button"
+                  onClick={addImageUrl}
+                  disabled={!imageInput.trim().startsWith('http')}
+                  className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  添加
+                </button>
               </div>
             </div>
           )}
