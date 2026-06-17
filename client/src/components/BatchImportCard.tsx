@@ -75,8 +75,7 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
   const toggleImage = (url: string) => {
     setSelectedImages(prev => {
       if (prev.includes(url)) return prev.filter(u => u !== url);
-      // slots full: replace the last selected with the new one
-      if (prev.length >= 3) return [...prev.slice(0, 2), url];
+      if (prev.length >= 3) return prev;
       return [...prev, url];
     });
   };
@@ -179,17 +178,14 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
                       type="button"
                       onClick={() => toggleImage(url)}
                       className={`relative w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                        isSelected ? 'border-blue-500' : 'border-gray-200 opacity-60 hover:opacity-80'
+                        isSelected ? 'border-blue-500' : 'border-gray-200 hover:border-gray-400'
                       }`}
                     >
                       <img src={url} alt="" className="w-full h-full object-cover" />
                       {isSelected && (
-                        <span className="absolute top-1 left-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                        <span className="absolute bottom-1 right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                           {order + 1}
                         </span>
-                      )}
-                      {!isSelected && selectedImages.length >= 3 && (
-                        <div className="absolute inset-0 bg-black/30" />
                       )}
                     </button>
                   );
