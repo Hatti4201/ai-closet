@@ -17,7 +17,8 @@ export interface UrlIngestDraft {
   temperatureIndex: number;
   coverageLevel: number;
   occasionTags: OccasionTag[];
-  images: string[];
+  images: string[];           // uploaded/confirmed images (≤3)
+  candidateImages: string[];  // all raw candidates for user selection in UI
 }
 
 interface PageMeta {
@@ -269,9 +270,10 @@ function isLikelyImageUrl(url: string): boolean {
   return IMAGE_EXT_RE.test(new URL(url).pathname);
 }
 
-/** Return true for icons, thumbnails, and other non-product images. */
+/** Return true for icons, tiny thumbnails, and other non-product images. */
 function isNoiseImage(url: string): boolean {
-  return /thumb(?:nail)?|_\d{2,3}x\d{0,3}|\/\d{2,3}x\d{2,3}\/|icon|logo|badge|avatar|sprite|placeholder|swatch|dot\.|pixel|rating|star|arrow/i.test(url);
+  // Only filter truly tiny size tokens (< 100px in both dimensions), named noise assets
+  return /\/\d{1,2}x\d{1,2}\/|_\d{1,2}x\d{1,2}[._]|icon|logo|badge|avatar|sprite|placeholder|dot\.|pixel|rating|star|arrow/i.test(url);
 }
 
 /** Deduplicate by pathname (ignores query params / CDN sizing tokens). */
@@ -335,19 +337,48 @@ function parseJsonLd(html: string): PageMeta {
   return { images: [] };
 }
 
+/** Recursively collect image URLs from any JSON blob (e.g. __NEXT_DATA__). */
+function collectUrlsFromJson(obj: unknown, out: string[]): void {
+  if (typeof obj === "string") {
+    if (IMAGE_EXT_RE.test(obj) && /^https?:\/\//.test(obj)) out.push(obj);
+  } else if (Array.isArray(obj)) {
+    obj.forEach(v => collectUrlsFromJson(v, out));
+  } else if (obj && typeof obj === "object") {
+    Object.values(obj as Record<string, unknown>).forEach(v => collectUrlsFromJson(v, out));
+  }
+}
+
+/** Extract images embedded in Next.js __NEXT_DATA__ or similar JS blobs. */
+function extractEmbeddedJsonImages(html: string): string[] {
+  const urls: string[] = [];
+  // Next.js
+  const nextData = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (nextData) {
+    try { collectUrlsFromJson(JSON.parse(nextData[1]), urls); } catch {}
+  }
+  // Nuxt / generic window.__* state blobs
+  for (const m of html.matchAll(/window\.__[A-Z_]+__\s*=\s*(\{[\s\S]{0,200000}\})\s*;?\s*<\/script>/g)) {
+    try { collectUrlsFromJson(JSON.parse(m[1]), urls); } catch {}
+  }
+  return urls;
+}
+
 /** Scan HTML for product gallery images (lazy-loaded or inline). */
 function extractGalleryImages(html: string, baseUrl: string): string[] {
   const results: string[] = [];
-  // data-zoom-src / data-src are common for product galleries
   const patterns = [
     /data-zoom-src=["']([^"']+)["']/gi,
     /data-src=["']([^"']+)["']/gi,
     /data-srcset=["']([^"']+)["']/gi,
+    /data-lazy-src=["']([^"']+)["']/gi,
+    /data-image-src=["']([^"']+)["']/gi,
+    /data-original=["']([^"']+)["']/gi,
+    /data-full=["']([^"']+)["']/gi,
+    /data-large-image=["']([^"']+)["']/gi,
     /<img[^>]+src=["']([^"']+)["']/gi,
   ];
   for (const re of patterns) {
     for (const m of html.matchAll(re)) {
-      // srcset: take the last (largest) url
       const raw = m[1].trim().split(",").pop()?.trim().split(/\s+/)[0] ?? m[1].trim();
       if (!IMAGE_EXT_RE.test(raw) || isNoiseImage(raw)) continue;
       try { results.push(absoluteUrl(raw, baseUrl)); } catch {}
@@ -405,11 +436,13 @@ async function fetchPage(url: string): Promise<PageMeta> {
   ]);
 
   const galleryImages = extractGalleryImages(html, url);
+  const embeddedImages = extractEmbeddedJsonImages(html);
 
   const allCandidates = [
     ...jsonLd.images.map(img => { try { return absoluteUrl(img, url); } catch { return ""; } }).filter(Boolean),
     ...(ogImage ? [absoluteUrl(ogImage, url)] : []),
     ...galleryImages,
+    ...embeddedImages.filter(u => !isNoiseImage(u)),
   ].filter(u => !isNoiseImage(u));
 
   // Dedupe, then sort: JSON-LD images first (keep order), then score-rank the rest
@@ -424,7 +457,7 @@ async function fetchPage(url: string): Promise<PageMeta> {
   return {
     title: title?.replace(/\s+/g, " ").trim(),
     brand: jsonLd.brand ?? brandFromUrl(url),
-    images: sorted.slice(0, 8), // keep up to 8 candidates for AI / heuristic selection
+    images: sorted.slice(0, 15), // keep up to 15 candidates
     description: description?.replace(/\s+/g, " ").trim(),
   };
 }
@@ -445,7 +478,7 @@ async function uploadImages(imageUrls: string[], max = 3): Promise<string[]> {
   return results.map((r, i) => r.status === "fulfilled" ? r.value : candidates[i]);
 }
 
-function heuristicDraft(sourceUrl: string, meta: PageMeta, images: string[]): UrlIngestDraft {
+function heuristicDraft(sourceUrl: string, meta: PageMeta, images: string[], candidateImages?: string[]): UrlIngestDraft {
   const text = `${meta.title ?? ""} ${meta.description ?? ""}`.toLowerCase();
   const category: Category =
     /dress/.test(text) ? "Dress" :
@@ -491,14 +524,15 @@ function heuristicDraft(sourceUrl: string, meta: PageMeta, images: string[]): Ur
     coverageLevel: warm.coverageLevel,
     occasionTags: ["casual"],
     images,
+    candidateImages: candidateImages ?? images,
   };
 }
 
-function parseModelDraft(sourceUrl: string, meta: PageMeta, images: string[], content: string): UrlIngestDraft {
+function parseModelDraft(sourceUrl: string, meta: PageMeta, images: string[], content: string, candidateImages?: string[]): UrlIngestDraft {
   const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) ?? content.match(/(\{[\s\S]*\})/);
   const raw = jsonMatch ? jsonMatch[1] : content;
   const parsed = JSON.parse(raw);
-  const fallback = heuristicDraft(sourceUrl, meta, images);
+  const fallback = heuristicDraft(sourceUrl, meta, images, candidateImages);
   const colors = Array.isArray(parsed.colors)
     ? dedupeColors(parsed.colors.map((c: any) => ({
       family: normalizeColor(c?.family ?? c?.name ?? c)?.family ?? "Multi",
@@ -537,10 +571,11 @@ function parseModelDraft(sourceUrl: string, meta: PageMeta, images: string[], co
     coverageLevel: warm.coverageLevel,
     occasionTags: occasionTags.length ? occasionTags : fallback.occasionTags,
     images,
+    candidateImages: candidateImages ?? fallback.candidateImages,
   };
 }
 
-async function callVisionModel(sourceUrl: string, meta: PageMeta, images: string[]): Promise<UrlIngestDraft | null> {
+async function callVisionModel(sourceUrl: string, meta: PageMeta, images: string[], candidateImages: string[]): Promise<UrlIngestDraft | null> {
   const base = process.env.LLM_BASE_URL ?? process.env.AI_BASE_URL;
   const key = process.env.LLM_API_KEY ?? process.env.AI_API_KEY;
   if (!base || !key) return null;
@@ -588,7 +623,7 @@ async function callVisionModel(sourceUrl: string, meta: PageMeta, images: string
   const data: any = await res.json();
   const text = data.choices?.[0]?.message?.content;
   if (typeof text !== "string") return null;
-  return parseModelDraft(sourceUrl, meta, images, text);
+  return parseModelDraft(sourceUrl, meta, images, text, candidateImages);
 }
 
 export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraft> {
@@ -603,19 +638,19 @@ export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraf
   if (isLikelyImageUrl(url.toString())) {
     const uploadedUrl = await uploadImage(url.toString());
     const images = [uploadedUrl];
-    const meta: PageMeta = {
-      title: "Imported clothing item",
-      brand: brandFromUrl(url.toString()),
-      images,
-    };
-    const modelDraft = await callVisionModel(url.toString(), meta, images).catch(() => null);
-    return modelDraft ?? heuristicDraft(url.toString(), meta, images);
+    const meta: PageMeta = { title: "Imported clothing item", brand: brandFromUrl(url.toString()), images };
+    const modelDraft = await callVisionModel(url.toString(), meta, images, images).catch(() => null);
+    return modelDraft ?? heuristicDraft(url.toString(), meta, images, images);
   }
 
   const meta = await fetchPage(url.toString());
-  console.log(`[ingest] found ${meta.images.length} candidate images for ${url.toString()}`);
-  const uploadedImages = await uploadImages(meta.images, 5);
-  const images = uploadedImages.length ? uploadedImages : meta.images.slice(0, 5);
-  const modelDraft = await callVisionModel(url.toString(), meta, images).catch(() => null);
-  return modelDraft ?? heuristicDraft(url.toString(), meta, images);
+  const candidateImages = meta.images; // all raw URLs for user selection
+  console.log(`[ingest] found ${candidateImages.length} candidate images for ${url.toString()}`);
+
+  // Upload only the first 3 for fast initial display; rest stay as raw candidates
+  const uploadedImages = await uploadImages(candidateImages.slice(0, 3), 3);
+  const images = uploadedImages.length ? uploadedImages : candidateImages.slice(0, 3);
+
+  const modelDraft = await callVisionModel(url.toString(), meta, images, candidateImages).catch(() => null);
+  return modelDraft ?? heuristicDraft(url.toString(), meta, images, candidateImages);
 }

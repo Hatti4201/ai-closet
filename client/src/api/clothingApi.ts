@@ -9,6 +9,7 @@ export type ImportedClothingDraft = Pick<
   sourceUrl: string;
   occasionTags?: string[];
   memberId?: string;
+  candidateImages?: string[];
 };
 
 export const clothingApi = {

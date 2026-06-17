@@ -72,7 +72,8 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
     }
   };
 
-  const allImages = (item.draft?.images ?? []).map(toUrl);
+  // candidateImages = all raw URLs from server; fall back to uploaded images
+  const allImages = (item.draft?.candidateImages ?? item.draft?.images ?? []).map(toUrl);
   const imgUrl = selectedImages[0] ?? (allImages.length ? getFirstImage(allImages) : null);
 
   const statusBadge = {
