@@ -167,6 +167,9 @@ export default function BatchImportCard({ item, onRetry, onRemove, onSaved }: Pr
               <p className="text-xs text-gray-500 mb-2">
                 选择图片（最多3张，点击选中/取消）
                 <span className="ml-2 text-blue-500">{selectedImages.length}/3 已选</span>
+                {selectedImages.length >= 3 && (
+                  <span className="ml-2 text-orange-400">已满，点击已选图片可取消后再换</span>
+                )}
               </p>
               <div className="flex flex-wrap gap-2">
                 {allImages.map((url, i) => {
