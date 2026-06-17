@@ -438,12 +438,11 @@ async function uploadImage(imageUrl: string): Promise<string> {
   return result.secure_url;
 }
 
-/** Upload up to `max` images concurrently, silently skip failures. */
+/** Upload up to `max` images concurrently; fall back to raw URL on failure. */
 async function uploadImages(imageUrls: string[], max = 3): Promise<string[]> {
-  const results = await Promise.allSettled(
-    imageUrls.slice(0, max).map(url => uploadImage(url))
-  );
-  return results.flatMap(r => r.status === "fulfilled" ? [r.value] : []);
+  const candidates = imageUrls.slice(0, max);
+  const results = await Promise.allSettled(candidates.map(url => uploadImage(url)));
+  return results.map((r, i) => r.status === "fulfilled" ? r.value : candidates[i]);
 }
 
 function heuristicDraft(sourceUrl: string, meta: PageMeta, images: string[]): UrlIngestDraft {
@@ -614,6 +613,7 @@ export async function ingestProductUrl(sourceUrl: string): Promise<UrlIngestDraf
   }
 
   const meta = await fetchPage(url.toString());
+  console.log(`[ingest] found ${meta.images.length} candidate images for ${url.toString()}`);
   const uploadedImages = await uploadImages(meta.images, 5);
   const images = uploadedImages.length ? uploadedImages : meta.images.slice(0, 5);
   const modelDraft = await callVisionModel(url.toString(), meta, images).catch(() => null);
